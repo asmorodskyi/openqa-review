@@ -44,7 +44,8 @@ class openQANotify(openQAHelper):
             fcntl.lockf(self.fp, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
             sys.exit(0)
-        jinjaEnv = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath="/scripts/"))
+        self.jinja_templates_root = self.config.get('DEFAULT', 'templates_folder', fallback='/openqa-review/')
+        jinjaEnv = jinja2.Environment(loader=jinja2.FileSystemLoader(searchpath=self.jinja_templates_root))
         self.notify_template_html = jinjaEnv.get_template("notify_template.html")
         self.notify_template_txt = jinjaEnv.get_template("notify_template.txt")
         self.latest_report_template_html = jinjaEnv.get_template("latest_report_template.html")
