@@ -124,18 +124,6 @@ class TaskHelper:
             raise AttributeError("Connection to osd is not defined ")
 
 
-class GitHelper(TaskHelper):
-
-    def __init__(self):
-        super().__init__("GitHelper")
-        self.repo = Repo(os.getcwd())
-        self.remote = None
-        try:
-            if self.repo.remotes.asmorodskyi.exists():
-                self.remote = self.repo.remotes.asmorodskyi
-        except Exception:
-            self.remote = self.repo.remotes.origin
-
 
 class openQAHelper(TaskHelper):
 
