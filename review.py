@@ -20,10 +20,10 @@ class Review(openQAHelper):
     SQL_WHERE_RESULTS = " and result in ('failed', 'timeout_exceeded', 'incomplete')"
 
     def __init__(self, dry_run: bool = False, aliasgroups: str = None):
-        super(Review, self).__init__('review', False, load_cache=True, aliasgroups=aliasgroups)
+        super(Review, self).__init__('review', aliasgroups=aliasgroups)
         self.dry_run = dry_run
         self.tabs_to_open = []
-        engine = create_engine('sqlite:////scripts/review.db')
+        engine = create_engine('sqlite:///{}'.format(self.config.get('DEFAULT', 'reviewdb')))
         Base.metadata.create_all(engine, Base.metadata.tables.values(), checkfirst=True)
         Session = sessionmaker(bind=engine)
         self.session = Session()

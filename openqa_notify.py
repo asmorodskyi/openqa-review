@@ -33,7 +33,7 @@ def msg_cb(ch, method, properties, body):
 class openQANotify(openQAHelper):
 
     def __init__(self):
-        super(openQANotify, self).__init__("openqanotify", False, load_cache=True)
+        super(openQANotify, self).__init__("openqanotify")
         self.rules_compiled = []
         self.binding_key = "suse.openqa.job.done"
         rules_defined = [(self.binding_key, lambda t, m: m.get('group_id', "") in self.my_osd_groups)]

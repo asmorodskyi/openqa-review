@@ -9,7 +9,6 @@ import traceback
 import requests
 import subprocess
 import json
-from git import Repo
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, MessageLatency, JobSQL
@@ -25,7 +24,7 @@ class TaskHelper:
     def __init__(self, name):
         self.name = name
         self.config = configparser.ConfigParser()
-        self.config.read('/etc/{}.ini'.format(self.name))
+        self.config.read('/etc/review.ini')
         self.to_list = self.config.get('DEFAULT', 'to_list', fallback='asmorodskyi@suse.com')
         self.send_mails = self.config['DEFAULT'].getboolean('send_emails', fallback=True)
         if self.config['DEFAULT'].getboolean('log_to_file', fallback=True):
@@ -124,15 +123,15 @@ class TaskHelper:
             raise AttributeError("Connection to osd is not defined ")
 
 
-
 class openQAHelper(TaskHelper):
 
     FIND_LATEST = "select max(id) from jobs where  build='{}' and group_id='{}'  and test='{}' and arch='{}' \
         and flavor='{}';"
+    OPENQA_URL_BASE = 'https://openqa.suse.de/'
+    OPENQA_API_BASE = 'https://openqa.suse.de/api/v1/'
 
-    def __init__(self, name, for_o3, load_cache: bool = False, aliasgroups: str = None):
+    def __init__(self, name, aliasgroups: str = None):
         super(openQAHelper, self).__init__(name)
-        self.for_o3 = for_o3
         if aliasgroups:
             groups_section = 'ALIAS'
             var_name = aliasgroups
@@ -141,17 +140,6 @@ class openQAHelper(TaskHelper):
             var_name = 'groups'
         self.my_osd_groups = [int(num_str) for num_str in str(self.config.get(
             groups_section, var_name, fallback='262,219,274,275')).split(',')]
-        if self.for_o3:
-            self.OPENQA_URL_BASE = 'https://openqa.opensuse.org/'
-        else:
-            self.OPENQA_URL_BASE = 'https://openqa.suse.de/'
-        self.OPENQA_API_BASE = self.OPENQA_URL_BASE + 'api/v1/'
-        if load_cache:
-            engine = create_engine('sqlite:////scripts/openqa_cache.db')
-            Base.metadata.create_all(engine, Base.metadata.tables.values(), checkfirst=True)
-            Session = sessionmaker(bind=engine)
-            self.session = Session()
-            self.msg_query = self.session.query(MessageLatency)
 
     def get_previous_builds(self, job_group_id: int):
         builds = ""
