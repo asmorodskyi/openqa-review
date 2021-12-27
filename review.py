@@ -10,6 +10,7 @@ from models import JobSQL, Base, ReviewCache, KnownIssues
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import re
+from datetime import datetime, timedelta
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -17,7 +18,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class Review(openQAHelper):
 
-    SQL_WHERE_RESULTS = " and result in ('failed', 'timeout_exceeded', 'incomplete')"
+    # we have job groups which are used for several versions.
+    # in such a case current logic may found unnecessary failures
+    # related to older versions. To avoid this we limit query by time
+    not_older_than_weeks = 7
 
     def __init__(self, dry_run: bool = False, aliasgroups: str = None):
         super(Review, self).__init__('review', aliasgroups=aliasgroups)
@@ -29,6 +33,9 @@ class Review(openQAHelper):
         self.session = Session()
         self.reviewcache_query = self.session.query(ReviewCache)
         self.known_issues_query = self.session.query(KnownIssues)
+        time_str = str(datetime.now() - timedelta(weeks=Review.not_older_than_weeks))
+        self.SQL_WHERE_RESULTS = " and result in ('failed', 'timeout_exceeded', 'incomplete') and t_created > '{}'::date".format(
+            time_str)
 
     def run(self):
         self.session.query(ReviewCache).delete()
@@ -38,14 +45,14 @@ class Review(openQAHelper):
                 continue
             previous_builds = self.get_previous_builds(groupid)
             self.logger.info('{} is latest build for {}'.format(latest_build, self.get_group_name(groupid)))
-            jobs_to_review = self.osd_get_jobs_where(latest_build, groupid, Review.SQL_WHERE_RESULTS)
+            jobs_to_review = self.osd_get_jobs_where(latest_build, groupid, self.SQL_WHERE_RESULTS)
             for job in jobs_to_review:
                 existing_bugrefs = self.get_bugrefs(job.id)
                 if len(existing_bugrefs) == 0 and not self.apply_known_refs(job):
                     bugrefs = set()
                     if previous_builds:
                         previous_jobs = self.osd_query("{} build in ({}) and test='{}' and flavor='{}' \
-                        and group_id={} {}".format(JobSQL.SELECT_QUERY, previous_builds, job.name, job.flavor, groupid, Review.SQL_WHERE_RESULTS))
+                        and group_id={} {}".format(JobSQL.SELECT_QUERY, previous_builds, job.name, job.flavor, groupid, self.SQL_WHERE_RESULTS))
                         failed_modules = self.get_failed_modules(job.id)
                         for previous_job in previous_jobs:
                             previous_job_sql = JobSQL(previous_job)
