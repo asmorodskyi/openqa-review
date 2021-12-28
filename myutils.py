@@ -223,7 +223,7 @@ class openQAHelper(TaskHelper):
     def open_in_browser(self, jobs):
         for job in jobs:
             time.sleep(2)
-            webbrowser.open("{}t{}".format(self.OPENQA_URL_BASE, job.id), autoraise=False)
+            webbrowser.get('firefox').open("{}t{}".format(self.OPENQA_URL_BASE, job.id), autoraise=False)
 
     def osd_job_group_results(self, groupid, build):
         rezult = self.osd_query(
