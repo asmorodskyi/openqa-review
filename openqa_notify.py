@@ -131,8 +131,9 @@ class openQANotify(openQAHelper):
             if answer == "Y":
                 self.open_in_browser(jobs)
                 return 0
-        self.logger.info("Generate report for email")
-        self.generate_latest_report(jobs, 3)
+        if len(jobs) > 0:
+            self.logger.info("Generate report for email")
+            self.generate_latest_report(jobs, 3)
 
     def group_summary(self):
         for group in self.my_osd_groups:
