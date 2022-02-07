@@ -13,10 +13,13 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Base, MessageLatency, JobSQL
 import configparser
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import psycopg2
 import webbrowser
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class TaskHelper:
@@ -129,6 +132,10 @@ class openQAHelper(TaskHelper):
         and flavor='{}';"
     OPENQA_URL_BASE = 'https://openqa.suse.de/'
     OPENQA_API_BASE = 'https://openqa.suse.de/api/v1/'
+    # we have job groups which are used for several versions.
+    # in such a case current logic may found unnecessary failures
+    # related to older versions. To avoid this we limit query by time
+    not_older_than_weeks = 7
 
     def __init__(self, name, aliasgroups: str = None):
         super(openQAHelper, self).__init__(name)
@@ -140,6 +147,9 @@ class openQAHelper(TaskHelper):
             var_name = 'groups'
         self.my_osd_groups = [int(num_str) for num_str in str(self.config.get(
             groups_section, var_name, fallback='262,219,274,275')).split(',')]
+        time_str = str(datetime.now() - timedelta(weeks=openQAHelper.not_older_than_weeks))
+        self.SQL_WHERE_RESULTS = " and result in ('failed', 'timeout_exceeded', 'incomplete') and t_created > '{}'::date".format(
+            time_str)
 
     def get_previous_builds(self, job_group_id: int):
         builds = ""
@@ -161,7 +171,7 @@ class openQAHelper(TaskHelper):
                                   verify=False).json()
         return group_json['group']['name']
 
-    def get_bugrefs(self, job_id):
+    def get_bugrefs(self, job_id, filter_by_user=None):
         bugrefs = set()
         response = requests.get('{}jobs/{}/comments'.format(self.OPENQA_API_BASE, job_id), verify=False)
         try:
@@ -169,8 +179,13 @@ class openQAHelper(TaskHelper):
             if 'error' in comments:
                 raise RuntimeError(comments)
             for comment in comments:
-                for bug in comment['bugrefs']:
-                    bugrefs.add(bug)
+                if filter_by_user:
+                    if filter_by_user == comment['userName']:
+                        for bug in comment['bugrefs']:
+                            bugrefs.add(bug)
+                else:
+                    for bug in comment['bugrefs']:
+                        bugrefs.add(bug)
         except simplejson.errors.JSONDecodeError as e:
             self.logger.error('{} is not JSON. {}'.format(response, e))
         return bugrefs

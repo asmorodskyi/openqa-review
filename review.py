@@ -10,18 +10,12 @@ from models import JobSQL, Base, ReviewCache, KnownIssues
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import re
-from datetime import datetime, timedelta
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class Review(openQAHelper):
-
-    # we have job groups which are used for several versions.
-    # in such a case current logic may found unnecessary failures
-    # related to older versions. To avoid this we limit query by time
-    not_older_than_weeks = 7
 
     def __init__(self, dry_run: bool = False, aliasgroups: str = None):
         super(Review, self).__init__('review', aliasgroups=aliasgroups)
@@ -33,9 +27,6 @@ class Review(openQAHelper):
         self.session = Session()
         self.reviewcache_query = self.session.query(ReviewCache)
         self.known_issues_query = self.session.query(KnownIssues)
-        time_str = str(datetime.now() - timedelta(weeks=Review.not_older_than_weeks))
-        self.SQL_WHERE_RESULTS = " and result in ('failed', 'timeout_exceeded', 'incomplete') and t_created > '{}'::date".format(
-            time_str)
 
     def run(self):
         self.session.query(ReviewCache).delete()
