@@ -180,18 +180,18 @@ class openQAHelper(TaskHelper):
             self.logger.error('{} is not JSON. {}'.format(response, e))
         return response.json()
 
-    def extract_bugrefs_from(self, comments):
+    def extract_bugrefs_from(self, comments, filter_by_user=None):
         bugrefs = set()
         for comment in comments:
             if not filter_by_user:
-                bugrefs.append(comment['bugrefs'])
+                bugrefs |= set(comment['bugrefs'])
             elif filter_by_user == comment['userName']:
-                bugrefs.append(comment['bugrefs'])
+                bugrefs |= set(comment['bugrefs'])
         return bugrefs
 
     def get_bugrefs(self, job_id, filter_by_user=None):
         comments = self.get_comments_from_job(job_id)
-        return self.extract_bugrefs_from(comments)
+        return self.extract_bugrefs_from(comments, filter_by_user)
 
     def check_latency(self, topic, subject):
         msg = self.msg_query.filter(MessageLatency.topic == topic).filter(
