@@ -171,24 +171,27 @@ class openQAHelper(TaskHelper):
                                   verify=False).json()
         return group_json['group']['name']
 
-    def get_bugrefs(self, job_id, filter_by_user=None):
-        bugrefs = set()
+    def get_comments_from_job(self, job_id):
         response = requests.get('{}jobs/{}/comments'.format(self.OPENQA_API_BASE, job_id), verify=False)
         try:
-            comments = response.json()
-            if 'error' in comments:
-                raise RuntimeError(comments)
-            for comment in comments:
-                if filter_by_user:
-                    if filter_by_user == comment['userName']:
-                        for bug in comment['bugrefs']:
-                            bugrefs.add(bug)
-                else:
-                    for bug in comment['bugrefs']:
-                        bugrefs.add(bug)
+            if 'error' in response.json():
+                raise RuntimeError(response.json())
         except simplejson.errors.JSONDecodeError as e:
             self.logger.error('{} is not JSON. {}'.format(response, e))
+        return response.json()
+
+    def extract_bugrefs_from(self, comments):
+        bugrefs = set()
+        for comment in comments:
+            if not filter_by_user:
+                bugrefs.append(comment['bugrefs'])
+            elif filter_by_user == comment['userName']:
+                bugrefs.append(comment['bugrefs'])
         return bugrefs
+
+    def get_bugrefs(self, job_id, filter_by_user=None):
+        comments = self.get_comments_from_job(job_id)
+        return self.extract_bugrefs_from(comments)
 
     def check_latency(self, topic, subject):
         msg = self.msg_query.filter(MessageLatency.topic == topic).filter(
