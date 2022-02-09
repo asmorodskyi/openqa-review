@@ -184,7 +184,7 @@ class openQAHelper(TaskHelper):
     def comments_has_ignore_label(self, comments):
         for comment in comments:
             if openQAHelper.SKIP_PATTERN in comment['renderedMarkdown']:
-                self.logger.debug(comment)
+                return True
         return False
 
     def extract_bugrefs_from(self, comments, filter_by_user=None):
