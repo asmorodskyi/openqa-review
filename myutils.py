@@ -132,6 +132,7 @@ class openQAHelper(TaskHelper):
         and flavor='{}';"
     OPENQA_URL_BASE = 'https://openqa.suse.de/'
     OPENQA_API_BASE = 'https://openqa.suse.de/api/v1/'
+    SKIP_PATTERN = '@reviewed'
     # we have job groups which are used for several versions.
     # in such a case current logic may found unnecessary failures
     # related to older versions. To avoid this we limit query by time
@@ -179,6 +180,12 @@ class openQAHelper(TaskHelper):
         except simplejson.errors.JSONDecodeError as e:
             self.logger.error('{} is not JSON. {}'.format(response, e))
         return response.json()
+
+    def comments_has_ignore_label(self, comments):
+        for comment in comments:
+            if openQAHelper.SKIP_PATTERN in comment['renderedMarkdown']:
+                self.logger.debug(comment)
+        return False
 
     def extract_bugrefs_from(self, comments, filter_by_user=None):
         bugrefs = set()
@@ -253,6 +260,28 @@ class openQAHelper(TaskHelper):
             cnt_jobs += rez[1]
         final_string = "total jobs={} {}".format(cnt_jobs, final_string)
         return final_string
+
+    def get_failed_modules(self, job_id):
+        rezult = self.osd_query(
+            "select name from job_modules where job_id={} and result='failed'".format(job_id))
+        failed_modules = ""
+        rezult.sort()
+        for rez in rezult:
+            if not failed_modules:
+                failed_modules = "{}".format(rez[0])
+            else:
+                failed_modules = "{},{}".format(failed_modules, rez[0])
+        if failed_modules:
+            return failed_modules
+        else:
+            return "NULL"
+
+    def add_comment(self, job, comment):
+        self.logger.debug('Add a comment to {} with reference {}. {}t{}'.format(
+            job, comment, self.OPENQA_URL_BASE, job.id))
+        cmd = 'openqa-cli api --host {} -X POST jobs/{}/comments text=\'{}\''.format(self.OPENQA_URL_BASE, job.id,
+                                                                                     comment)
+        self.shell_exec(cmd, self.dry_run)
 
 
 def is_matched(rules, topic, msg):

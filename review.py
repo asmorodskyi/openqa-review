@@ -38,7 +38,11 @@ class Review(openQAHelper):
             self.logger.info('{} is latest build for {}'.format(latest_build, self.get_group_name(groupid)))
             jobs_to_review = self.osd_get_jobs_where(latest_build, groupid, self.SQL_WHERE_RESULTS)
             for job in jobs_to_review:
-                existing_bugrefs = self.get_bugrefs(job.id)
+                comments = self.get_comments_from_job(job.id)
+                if self.comments_has_ignore_label(comments):
+                    # we skiping due instruction in comments
+                    continue
+                existing_bugrefs = self.extract_bugrefs_from(comments)
                 if len(existing_bugrefs) == 0 and not self.apply_known_refs(job):
                     bugrefs = set()
                     if previous_builds:
@@ -65,28 +69,6 @@ class Review(openQAHelper):
             answer = input("Open in browser? [Y/anything else] ")
             if answer == "Y":
                 self.open_in_browser(self.tabs_to_open)
-
-    def add_comment(self, job, comment):
-        self.logger.debug('Add a comment to {} with reference {}. {}t{}'.format(
-            job, comment, self.OPENQA_URL_BASE, job.id))
-        cmd = 'openqa-cli api --host {} -X POST jobs/{}/comments text=\'{}\''.format(self.OPENQA_URL_BASE, job.id,
-                                                                                     comment)
-        self.shell_exec(cmd, self.dry_run)
-
-    def get_failed_modules(self, job_id):
-        rezult = self.osd_query(
-            "select name from job_modules where job_id={} and result='failed'".format(job_id))
-        failed_modules = ""
-        rezult.sort()
-        for rez in rezult:
-            if not failed_modules:
-                failed_modules = "{}".format(rez[0])
-            else:
-                failed_modules = "{},{}".format(failed_modules, rez[0])
-        if failed_modules:
-            return failed_modules
-        else:
-            return "NULL"
 
     def apply_known_refs(self, job):
         failed_modules = self.get_failed_modules(job.id)
