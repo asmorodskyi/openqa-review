@@ -6,4 +6,8 @@
 {% endfor %}
 =======================================================================================================================
 
+{% for st in statuses %}
+   <p>{{st}}</p>
+{% endfor %}
+========================================================================================================================
 Email sent from autobot.qa.suse.de by script https://github.com/asmorodskyi/scripts/blob/master/openqa_notify.py triggered by cron job

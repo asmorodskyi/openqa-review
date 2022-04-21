@@ -34,7 +34,10 @@
          </tr>
          {% endfor %}
       </table>
-
+      {% for st in statuses %}
+         <p>{{st}}</p>
+      {% endfor %}
+========================================================================================================
       <p> Email sent from autobot.qa.suse.de by script
       <a href="https://github.com/asmorodskyi/scripts/blob/master/openqa_notify.py">openqa_notify.py</a>
  triggered by cron job</p>

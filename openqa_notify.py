@@ -82,8 +82,9 @@ class openQANotify(openQAHelper):
                        html_report, self.config.get(str(group_id), 'to_list', fallback=None))
 
     def generate_latest_report(self, jobs, hours_depth):
-        txt_report = self.latest_report_template_txt.render(items=jobs)
-        html_report = self.latest_report_template_html.render(items=jobs, baseurl=self.OPENQA_URL_BASE + "t")
+        txt_report = self.latest_report_template_txt.render(items=jobs, statuses=self.group_summary())
+        html_report = self.latest_report_template_html.render(
+            items=jobs, baseurl=self.OPENQA_URL_BASE + "t", statuses=self.group_summary())
         self.send_mail('[Openqa-Notify] Failures within latest {} hours'.format(hours_depth), txt_report,
                        html_report, self.config.get('DEFAULT', 'to_list', fallback=None))
 
@@ -116,7 +117,8 @@ class openQANotify(openQAHelper):
 
     def status(self, not_processed, silent):
         # amount of jobs and statuses . age of oldest and youngest jobs
-        jobs = self.osd_get_latest_failures(3, ','.join([str(i) for i in self.my_osd_groups]))
+        hours_depth = 12
+        jobs = self.osd_get_latest_failures(hours_depth, ','.join([str(i) for i in self.my_osd_groups]))
         self.logger.info("Getting current bugrefs and list of failed modules for each job")
         self.get_bugrefs_and_failed_modules(jobs)
         if not_processed:
@@ -133,15 +135,18 @@ class openQANotify(openQAHelper):
                 return 0
         if len(jobs) > 0:
             self.logger.info("Generate report for email")
-            self.generate_latest_report(jobs, 3)
+            self.generate_latest_report(jobs, hours_depth)
 
     def group_summary(self):
+        statuses = []
         for group in self.my_osd_groups:
             latest_build = self.get_latest_build(group)
             if latest_build:
                 status_str = self.osd_job_group_results(group, latest_build)
                 status_str = "{} - latest_build={} , {}".format(self.get_group_name(group), latest_build, status_str)
                 self.logger.info(status_str)
+                statuses.append(status_str)
+        return statuses
 
     def handle_job_done(self, groupid):
         latest_build = self.get_latest_build(groupid)
@@ -169,7 +174,6 @@ def main():
     if args.generate_report:
         if args.status:
             notifier.status(args.not_processed, args.silent)
-            # notifier.group_summary()
         else:
             for group in notifier.my_osd_groups:
                 notifier.handle_job_done(group)
