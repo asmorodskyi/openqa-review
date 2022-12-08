@@ -223,14 +223,18 @@ class openQAHelper(TaskHelper):
     def osd_get_jobs_where(self, build, group_id, extra_conditions=''):
         rezult = self.osd_query("{} build='{}' and group_id='{}' {}".format(
             JobSQL.SELECT_QUERY, build, group_id, extra_conditions))
-        jobs = []
-        for raw_job in rezult:
-            sql_job = JobSQL(raw_job)
-            rez = self.osd_query(self.FIND_LATEST.format(
-                build, group_id, sql_job.name, sql_job.arch, sql_job.flavor))
-            if rez[0][0] == sql_job.id:
-                jobs.append(sql_job)
-        return jobs
+        if rezult is None:
+            return None
+        else:
+            jobs = []
+            for raw_job in rezult:
+                sql_job = JobSQL(raw_job)
+                self.logger.info(raw_job)
+                rez = self.osd_query(self.FIND_LATEST.format(
+                    build, group_id, sql_job.name, sql_job.arch, sql_job.flavor))
+                if rez[0][0] == sql_job.id:
+                    jobs.append(sql_job)
+            return jobs
 
     def osd_get_latest_failures(self, before_hours, group_ids):
         jobs = []

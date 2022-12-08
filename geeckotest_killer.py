@@ -31,7 +31,10 @@ class Killer(openQAHelper):
             for job in jobs_to_review:
                 failed_modules = self.get_failed_modules(job.id)
                 if module_filter in failed_modules:
-                    self.add_comment(job, openQAHelper.SKIP_PATTERN)
+                    if self.dry_run:
+                        self.logger.info('Job {} wont get comment "{}" due to dry_run mode')
+                    else:
+                        self.add_comment(job, openQAHelper.SKIP_PATTERN)
 
     def get_all_labels(self):
         self.my_osd_groups = [219]
@@ -49,6 +52,22 @@ class Killer(openQAHelper):
             for bug in bugrefs:
                 self.logger.info(bug)
 
+    def get_jobs_by(self, query, build, delete):
+        self.my_osd_groups = [430]
+        for groupid in self.my_osd_groups:
+            rez = self.osd_get_jobs_where(build, groupid, query)
+            ids_list = ""
+            for j1 in rez:
+                if delete is None:
+                    if len(ids_list) == 0:
+                        ids_list = str(j1.id)
+                    else:
+                        ids_list = "{},{}".format(ids_list, j1.id)
+                else:
+                    cmd = 'openqa-cli api --host {} -X DELETE jobs/{}'.format(self.OPENQA_URL_BASE, j1.id)
+                    self.shell_exec(cmd, dryrun=self.dry_run)
+            if delete is None:
+                self.logger.info(ids_list)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -56,14 +75,19 @@ def main():
     parser.add_argument('-k', '--kill', action='store_true', help="Kill geekotest comments")
     parser.add_argument('-l', '--labelmodule', help="Label failed job")
     parser.add_argument('-g', '--getlabels', action='store_true', help='get list of labels')
+    parser.add_argument('-q', '--query', help='return job ids by filter')
+    parser.add_argument('-b', '--build', help='openQA build number')
+    parser.add_argument('--delete', action='store_true', help='delete')
     args = parser.parse_args()
     killer = Killer(args.dry_run)
     if args.kill:
         killer.kill()
     elif args.getlabels:
         killer.get_all_labels()
-    else:
+    elif args.labelmodule:
         killer.label_by_module(args.labelmodule)
+    elif args.query:
+        killer.get_jobs_by(args.query, args.build, args.delete)
 
 
 if __name__ == "__main__":
