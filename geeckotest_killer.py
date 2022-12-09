@@ -69,6 +69,15 @@ class Killer(openQAHelper):
             if delete is None:
                 self.logger.info(ids_list)
 
+    def sql(self, query, delete):
+        rez = self.osd_query(query)
+        for j1 in rez:
+            if delete:
+                cmd = 'openqa-cli api --host {} -X DELETE jobs/{}'.format(self.OPENQA_URL_BASE, j1[0])
+                self.shell_exec(cmd, log=True, dryrun=self.dry_run)
+            else:
+                self.logger.info(j1)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--dry_run', action='store_true', help="Fake any calls to openQA with log messages")
@@ -78,6 +87,7 @@ def main():
     parser.add_argument('-q', '--query', help='return job ids by filter')
     parser.add_argument('-b', '--build', help='openQA build number')
     parser.add_argument('--delete', action='store_true', help='delete')
+    parser.add_argument('--sql', help='delete')
     args = parser.parse_args()
     killer = Killer(args.dry_run)
     if args.kill:
@@ -88,6 +98,8 @@ def main():
         killer.label_by_module(args.labelmodule)
     elif args.query:
         killer.get_jobs_by(args.query, args.build, args.delete)
+    elif args.sql:
+        killer.sql(args.sql, args.delete)
 
 
 if __name__ == "__main__":
