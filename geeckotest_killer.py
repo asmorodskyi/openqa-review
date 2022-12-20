@@ -23,7 +23,6 @@ class Killer(openQAHelper):
                     self.logger.info('job {} has {} bugrefs'.format(job.id, len(bugrefs)))
 
     def label_by_module(self, module_filter, build, comment):
-        self.my_osd_groups = [461]
         if comment is None:
             comment = openQAHelper.SKIP_PATTERN
         for groupid in self.my_osd_groups:
@@ -94,8 +93,11 @@ def main():
     parser.add_argument('-c', '--comment', help='openQA build number')
     parser.add_argument('--delete', action='store_true', help='delete')
     parser.add_argument('--sql', help='delete')
+    parser.add_argument('--groupid', help='hard code group id')
     args = parser.parse_args()
     killer = Killer(args.dry_run)
+    if args.groupid:
+        killer.my_osd_groups = [args.groupid]
     if args.kill:
         killer.kill()
     elif args.getlabels:
