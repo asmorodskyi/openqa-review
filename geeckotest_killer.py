@@ -92,7 +92,7 @@ class Killer(openQAHelper):
             elif restart:
                 clone_cmd = '/usr/share/openqa/script/clone_job.pl'
                 common_flags = ' --skip-chained-deps --parental-inheritance '
-                cmd = '{} {} --within-instance {} {} PUBLIC_CLOUD_NAMESPACE=ccoe-qac'.format(
+                cmd = '{} {} --within-instance {} {}'.format(
                     clone_cmd, common_flags, self.OPENQA_URL_BASE, j1[0])
                 self.shell_exec(cmd, log=True, dryrun=self.dry_run)
             elif comment:
