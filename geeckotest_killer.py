@@ -1,9 +1,8 @@
 #!/usr/bin/python3
-
+import argparse
 from myutils import openQAHelper
 from models import JobSQL
 
-import argparse
 
 
 class Killer(openQAHelper):
@@ -15,15 +14,13 @@ class Killer(openQAHelper):
     def kill(self):
         for groupid in self.my_osd_groups:
             latest_build = self.get_latest_build(groupid)
-            self.logger.info('{} is latest build for {}'.format(
-                latest_build, self.get_group_name(groupid)))
+            self.logger.info(f'{latest_build} is latest build for {self.get_group_name(groupid)}')
             jobs_to_review = self.osd_get_jobs_where(
                 latest_build, groupid, self.SQL_WHERE_RESULTS)
             for job in jobs_to_review:
                 bugrefs = self.get_bugrefs(job.id, filter_by_user='geekotest')
                 if len(bugrefs) > 0:
-                    self.logger.info(
-                        'job {} has {} bugrefs'.format(job.id, len(bugrefs)))
+                    self.logger.info(f'job {job.id} has {len(bugrefs)} bugrefs')
 
     def label_by_module(self, module_filter, build, comment):
         if comment is None:
@@ -33,16 +30,14 @@ class Killer(openQAHelper):
                 latest_build = self.get_latest_build(groupid)
             else:
                 latest_build = build
-            self.logger.info('{} is latest build for {}'.format(
-                latest_build, self.get_group_name(groupid)))
+            self.logger.info(f'{latest_build} is latest build for {self.get_group_name(groupid)}')
             jobs_to_review = self.osd_get_jobs_where(
                 latest_build, groupid, self.SQL_WHERE_RESULTS)
             for job in jobs_to_review:
                 failed_modules = self.get_failed_modules(job.id)
                 if module_filter in failed_modules:
                     if self.dry_run:
-                        self.logger.info(
-                            'Job {} wont get comment "{}" due to dry_run mode'.format(job.id, comment))
+                        self.logger.info(f'Job {job.id} wont get comment "{comment}" due to dry_run mode')
                     else:
                         self.add_comment(job, comment)
 
@@ -112,7 +107,7 @@ def main():
                         action='store_true', help='get list of labels')
     parser.add_argument('-q', '--query', help='return job ids by filter')
     parser.add_argument('-b', '--build', help='openQA build number')
-    parser.add_argument('-c', '--comment', help='openQA build number')
+    parser.add_argument('-c', '--comment', help='Insert comment to openQA job')
     parser.add_argument('--delete', action='store_true', help='delete')
     parser.add_argument('--restart', action='store_true', help='restart')
     parser.add_argument('--sql', help='delete')
