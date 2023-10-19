@@ -64,7 +64,7 @@ class Review(openQAHelper):
                         self.session.commit()
                     else:
                         for ref in bugrefs:
-                            self.add_comment(job, ref)
+                            self.add_comment(job, ref, self.dry_run)
         if self.tabs_to_open:
             answer = input("Open in browser? [Y/anything else] ")
             if answer == "Y":
@@ -84,7 +84,7 @@ class Review(openQAHelper):
                 if item.label == 'skip':
                     self.logger.debug("Ignoring {} due to skip instruction in known issues".format(job))
                 else:
-                    self.add_comment(job, item.label)
+                    self.add_comment(job, item.label, self.dry_run)
                 comment_applied = True
         return comment_applied
 

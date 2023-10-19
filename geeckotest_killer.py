@@ -39,7 +39,7 @@ class Killer(openQAHelper):
                     if self.dry_run:
                         self.logger.info(f'Job {job.id} wont get comment "{comment}" due to dry_run mode')
                     else:
-                        self.add_comment(job, comment)
+                        self.add_comment(job, comment, self.dry_run)
 
     def get_all_labels(self):
         self.my_osd_groups = [219]
@@ -91,7 +91,7 @@ class Killer(openQAHelper):
                     clone_cmd, common_flags, self.OPENQA_URL_BASE, j1[0], params)
                 self.shell_exec(cmd, log=True, dryrun=self.dry_run)
             elif comment:
-                self.add_comment(JobSQL(j1), comment)
+                self.add_comment(JobSQL(j1), comment, self.dry_run)
             else:
                 self.logger.info(j1)
 

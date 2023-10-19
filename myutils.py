@@ -1,23 +1,20 @@
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-import logzero
-import smtplib
 import socket
-import os
+import smtplib
 import traceback
-import requests
 import subprocess
 import json
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from models import Base, MessageLatency, JobSQL
 import configparser
 from datetime import datetime, timedelta
 import time
-import psycopg2
 import webbrowser
+import requests
+import psycopg2
+import logzero
 import urllib3
+from models import JobSQL
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -32,7 +29,7 @@ class TaskHelper:
         self.send_mails = self.config['DEFAULT'].getboolean('send_emails', fallback=True)
         if self.config['DEFAULT'].getboolean('log_to_file', fallback=True):
             self.logger = logzero.setup_logger(
-                name=name, logfile='/var/log/{0}/{0}.log'.format(self.name), formatter=logzero.LogFormatter(
+                name=name, logfile=f'/var/log/{self.name}/{self.name}.log', formatter=logzero.LogFormatter(
                     fmt='%(color)s[%(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s',
                     datefmt='%d-%m %H:%M:%S'))
         else:
@@ -43,6 +40,9 @@ class TaskHelper:
             self.osd_username = self.config.get('OSD', 'username')
             self.osd_password = self.config.get('OSD', 'password')
             self.osd_host = self.config.get('OSD', 'host')
+
+    def request_get(self, url):
+        return requests.get(url, timeout=200, verify=False).json()
 
     def send_mail(self, subject, message, html_message: str = None, custom_to_list: str = None):
         try:
@@ -63,22 +63,21 @@ class TaskHelper:
             server.ehlo()
             server.sendmail('asmorodskyi@suse.com', custom_to_list.split(','), mimetext.as_string())
         except Exception:
-            self.logger.error("Fail to send email - {}".format(traceback.format_exc()))
+            self.logger.error(f"Fail to send email - {traceback.format_exc()}")
 
     def handle_error(self, error=''):
         if not error:
             error = traceback.format_exc()
         self.logger.error(error)
         if self.send_mails:
-            self.send_mail('[{}] ERROR - {}'.format(self.name, socket.gethostname()), error)
+            self.send_mail(f'[{self.name}] ERROR - {socket.gethostname()}', error)
 
     def get_latest_build(self, job_group_id=262):
         build = '1'
         try:
-            group_json = requests.get('https://openqa.suse.de/group_overview/{}.json'.format(job_group_id),
-                                      verify=False).json()
+            group_json = self.request_get(f'https://openqa.suse.de/group_overview/{job_group_id}.json')
             if len(group_json['build_results']) == 0:
-                self.logger.warning("No jobs found in {}".format(job_group_id))
+                self.logger.warning(f"No jobs found in {job_group_id}")
                 return None
             build = group_json['build_results'][0]['build']
         except Exception as e:
@@ -88,7 +87,7 @@ class TaskHelper:
 
     def shell_exec(self, cmd, log=False, is_json=False, dryrun: bool = False):
         if dryrun:
-            self.logger.info("NOT EXECUTING - {}".format(cmd))
+            self.logger.info(f"NOT EXECUTING - {cmd}")
             return
         try:
             if log:
@@ -149,50 +148,42 @@ class openQAHelper(TaskHelper):
         self.my_osd_groups = [int(num_str) for num_str in str(self.config.get(
             groups_section, var_name, fallback='262,219,274,275')).split(',')]
         time_str = str(datetime.now() - timedelta(weeks=openQAHelper.not_older_than_weeks))
-        self.SQL_WHERE_RESULTS = " and result in ('failed', 'timeout_exceeded', 'incomplete') and t_created > '{}'::date".format(
-            time_str)
+        self.SQL_WHERE_RESULTS = f" and result in ('failed', 'timeout_exceeded', 'incomplete') and t_created > '{time_str}'::date"
 
     def get_previous_builds(self, job_group_id: int):
         builds = ""
-        group_json = requests.get('{}group_overview/{}.json'.format(self.OPENQA_URL_BASE, job_group_id),
-                                  verify=False).json()
+        group_json = self.request_get(f'{self.OPENQA_URL_BASE}group_overview/{job_group_id}.json')
         max_deep = len(group_json['build_results'])
         # we need maximum 3 builds
-        for i in range(0, 3):
+        for i in range(3):
             if (i + 1) >= max_deep:
                 break
             if not builds:
-                builds = "'{}'".format(group_json['build_results'][i + 1]['build'])
+                builds = f"'{group_json['build_results'][i + 1]['build']}'"
             else:
-                builds = "{},'{}'".format(builds, group_json['build_results'][i + 1]['build'])
+                builds = f"{builds},'{group_json['build_results'][i + 1]['build']}'"
         return builds
 
     def get_group_name(self, job_group_id: int):
-        group_json = requests.get('{}group_overview/{}.json'.format(self.OPENQA_URL_BASE, job_group_id),
-                                  verify=False).json()
+        group_json = self.request_get(f'{self.OPENQA_URL_BASE}group_overview/{job_group_id}.json')
         return group_json['group']['name']
 
     def get_comments_from_job(self, job_id):
-        response = requests.get('{}jobs/{}/comments'.format(self.OPENQA_API_BASE, job_id), verify=False)
-        try:
-            if 'error' in response.json():
-                raise RuntimeError(response.json())
-        except simplejson.errors.JSONDecodeError as e:
-            self.logger.error('{} is not JSON. {}'.format(response, e))
-        return response.json()
+        response = self.request_get(f'{self.OPENQA_API_BASE}jobs/{job_id}/comments')
+        if 'error' in response:
+            raise RuntimeError(response)
+        return response
 
     def comments_has_ignore_label(self, comments):
-        for comment in comments:
-            if openQAHelper.SKIP_PATTERN in comment['renderedMarkdown']:
-                return True
-        return False
+        return any(
+            openQAHelper.SKIP_PATTERN in comment['renderedMarkdown']
+            for comment in comments
+        )
 
     def extract_bugrefs_from(self, comments, filter_by_user=None):
         bugrefs = set()
         for comment in comments:
-            if not filter_by_user:
-                bugrefs |= set(comment['bugrefs'])
-            elif filter_by_user == comment['userName']:
+            if not filter_by_user or filter_by_user == comment['userName']:
                 bugrefs |= set(comment['bugrefs'])
         return bugrefs
 
@@ -200,92 +191,70 @@ class openQAHelper(TaskHelper):
         comments = self.get_comments_from_job(job_id)
         return self.extract_bugrefs_from(comments, filter_by_user)
 
-    def check_latency(self, topic, subject):
-        msg = self.msg_query.filter(MessageLatency.topic == topic).filter(
-            MessageLatency.subject == subject).one_or_none()
-        rez = 0
-        if msg:
-            if datetime.now() < msg.locked_till:
-                self.logger.info('still locked {}'.format(msg))
-                rez = 3
-            else:
-                msg.lock()
-                self.logger.info('Got locked {}'.format(msg))
-                rez = 2
-            msg.inc_cnt()
-        else:
-            new_msg = MessageLatency(topic, subject)
-            self.session.add(new_msg)
-            rez = 1
-        self.session.commit()
-        return rez
-
     def osd_get_jobs_where(self, build, group_id, extra_conditions=''):
-        rezult = self.osd_query("{} build='{}' and group_id='{}' {}".format(
-            JobSQL.SELECT_QUERY, build, group_id, extra_conditions))
+        rezult = self.osd_query(f"{JobSQL.SELECT_QUERY} build='{build}' and group_id='{group_id}' {extra_conditions}")
         if rezult is None:
             return None
-        else:
-            jobs = []
-            for raw_job in rezult:
-                sql_job = JobSQL(raw_job)
-                self.logger.info(raw_job)
-                rez = self.osd_query(self.FIND_LATEST.format(
-                    build, group_id, sql_job.name, sql_job.arch, sql_job.flavor))
-                if rez[0][0] == sql_job.id:
-                    jobs.append(sql_job)
-            return jobs
+        jobs = []
+        for raw_job in rezult:
+            sql_job = JobSQL(raw_job)
+            self.logger.info(raw_job)
+            rez = self.osd_query(self.FIND_LATEST.format(
+                build, group_id, sql_job.name, sql_job.arch, sql_job.flavor))
+            if rez[0][0] == sql_job.id:
+                jobs.append(sql_job)
+        return jobs
 
     def osd_get_latest_failures(self, before_hours, group_ids):
         jobs = []
-        rezult = self.osd_query("{} result='failed' and t_created > (NOW() - INTERVAL '{} hours' ) and group_id in ({})".format(
-            JobSQL.SELECT_QUERY, before_hours, group_ids))
+        rezult = self.osd_query(f"{JobSQL.SELECT_QUERY} result='failed' and t_created > (NOW() - INTERVAL '{before_hours} hours' ) and group_id in ({group_ids})")
         for raw_job in rezult:
             sql_job = JobSQL(raw_job)
             rez = self.osd_query(self.FIND_LATEST.format(
                 sql_job.build, raw_job[7], sql_job.name, sql_job.arch, sql_job.flavor))
             if rez[0][0] == sql_job.id:
                 jobs.append(sql_job)
-        self.logger.info("Got {} failed jobs in monitored job groups on osd".format(len(rezult)))
+        self.logger.info(f"Got {len(rezult)} failed jobs in monitored job groups on osd")
         return jobs
 
     def open_in_browser(self, jobs):
         for job in jobs:
             time.sleep(2)
-            webbrowser.get('firefox').open("{}t{}".format(self.OPENQA_URL_BASE, job.id), autoraise=False)
+            webbrowser.get('firefox').open(
+                f"{self.OPENQA_URL_BASE}t{job.id}", autoraise=False
+            )
 
     def osd_job_group_results(self, groupid, build):
         rezult = self.osd_query(
-            "select result,count(*) from jobs where group_id={} and build='{}' group by result;".format(groupid, build))
+            f"select result,count(*) from jobs where group_id={groupid} and build='{build}' group by result;"
+        )
         final_string = ""
         cnt_jobs = 0
         for rez in rezult:
-            final_string = "{} {}={}".format(final_string, rez[0], rez[1])
+            final_string = f"{final_string} {rez[0]}={rez[1]}"
             cnt_jobs += rez[1]
-        final_string = "total jobs={} {}".format(cnt_jobs, final_string)
+        final_string = f"total jobs={cnt_jobs} {final_string}"
         return final_string
 
     def get_failed_modules(self, job_id):
         rezult = self.osd_query(
-            "select name from job_modules where job_id={} and result='failed'".format(job_id))
+            f"select name from job_modules where job_id={job_id} and result='failed'"
+        )
         failed_modules = ""
         rezult.sort()
         for rez in rezult:
             if not failed_modules:
-                failed_modules = "{}".format(rez[0])
+                failed_modules = f"{rez[0]}"
             else:
-                failed_modules = "{},{}".format(failed_modules, rez[0])
-        if failed_modules:
-            return failed_modules
-        else:
-            return "NULL"
+                failed_modules = f"{failed_modules},{rez[0]}"
+        return failed_modules or "NULL"
 
-    def add_comment(self, job, comment):
-        self.logger.debug('Add a comment to {} with reference {}. {}t{}'.format(
-            job, comment, self.OPENQA_URL_BASE, job.id))
-        cmd = 'openqa-cli api --host {} -X POST jobs/{}/comments text=\'{}\''.format(self.OPENQA_URL_BASE, job.id,
-                                                                                     comment)
-        self.shell_exec(cmd, self.dry_run)
+    def add_comment(self, job, comment, dry_run):
+        self.logger.debug(
+            f'Add a comment to {job} with reference {comment}. {self.OPENQA_URL_BASE}t{job.id}'
+        )
+        cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X POST jobs/{job.id}/comments text=\'{comment}\'"
+        self.shell_exec(cmd, dry_run)
 
 
 def is_matched(rules, topic, msg):
