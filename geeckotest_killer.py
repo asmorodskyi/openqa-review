@@ -7,103 +7,66 @@ from models import JobSQL
 
 class Killer(openQAHelper):
 
-    def __init__(self, dry_run: bool = False):
+    def __init__(self, groupid: str, dryrun: bool = False, latest_build: str = None):
         super(Killer, self).__init__('killer')
-        self.dry_run = dry_run
+        self.dryrun = dryrun
+        self.groupid = groupid
+        if latest_build is None:
+            self.latest_build = self.get_latest_build(self.groupid)
+        else:
+            self.latest_build = latest_build
+        self.logger.info('%s is latest build for %s', self.latest_build, self.get_group_name(self.groupid))
 
-    def kill(self):
-        for groupid in self.my_osd_groups:
-            latest_build = self.get_latest_build(groupid)
-            self.logger.info(f'{latest_build} is latest build for {self.get_group_name(groupid)}')
-            jobs_to_review = self.osd_get_jobs_where(
-                latest_build, groupid, self.SQL_WHERE_RESULTS)
-            for job in jobs_to_review:
-                bugrefs = self.get_bugrefs(job.id, filter_by_user='geekotest')
-                if len(bugrefs) > 0:
-                    self.logger.info(f'job {job.id} has {len(bugrefs)} bugrefs')
-
-    def label_by_module(self, module_filter, build, comment):
+    def label_by_module(self, module_filter, comment):
         if comment is None:
             comment = openQAHelper.SKIP_PATTERN
-        for groupid in self.my_osd_groups:
-            if build is None:
-                latest_build = self.get_latest_build(groupid)
-            else:
-                latest_build = build
-            self.logger.info(f'{latest_build} is latest build for {self.get_group_name(groupid)}')
-            jobs_to_review = self.osd_get_jobs_where(
-                latest_build, groupid, self.SQL_WHERE_RESULTS)
-            for job in jobs_to_review:
-                failed_modules = self.get_failed_modules(job.id)
-                if module_filter in failed_modules:
-                    if self.dry_run:
-                        self.logger.info(f'Job {job.id} wont get comment "{comment}" due to dry_run mode')
-                    else:
-                        self.add_comment(job, comment, self.dry_run)
+        jobs_to_review = self.osd_get_jobs_where(self.latest_build, self.groupid, self.SQL_WHERE_RESULTS)
+        for job in jobs_to_review:
+            if module_filter in self.get_failed_modules(job.id):
+                self.add_comment(job, comment, self.dryrun)
 
     def get_all_labels(self):
-        self.my_osd_groups = [219]
+        jobs_to_review = self.osd_get_jobs_where(self.latest_build, self.groupid, self.SQL_WHERE_RESULTS)
         bugrefs = set()
-        for groupid in self.my_osd_groups:
-            latest_build = self.get_latest_build(groupid)
-            self.logger.info('{} is latest build for {}'.format(
-                latest_build, self.get_group_name(groupid)))
-            jobs_to_review = self.osd_get_jobs_where(
-                latest_build, groupid, self.SQL_WHERE_RESULTS)
-            for job in jobs_to_review:
-                bugrefs = bugrefs | self.get_bugrefs(job.id)
-
+        for job in jobs_to_review:
+            #TODO reveal ability to get only comments from certain user
+            #bugrefs = self.get_bugrefs(job.id, filter_by_user='geekotest')
+            bugrefs = bugrefs | self.get_bugrefs(job.id)
         if len(bugrefs) == 0:
             self.logger.info('No jobs labeled')
         else:
             for bug in bugrefs:
                 self.logger.info(bug)
 
-    def get_jobs_by(self, query, build, delete):
-        self.my_osd_groups = [430]
-        for groupid in self.my_osd_groups:
-            rez = self.osd_get_jobs_where(build, groupid, query)
-            ids_list = ""
-            for j1 in rez:
-                if delete is None:
-                    if len(ids_list) == 0:
-                        ids_list = str(j1.id)
-                    else:
-                        ids_list = "{},{}".format(ids_list, j1.id)
-                else:
-                    cmd = 'openqa-cli api --host {} -X DELETE jobs/{}'.format(
-                        self.OPENQA_URL_BASE, j1.id)
-                    self.shell_exec(cmd, dryrun=self.dry_run)
-            if delete is None:
-                self.logger.info(ids_list)
-
-    def sql(self, query, delete, restart, comment, params):
-        rez = self.osd_query(query)
+    def get_jobs_by(self, query, delete, restart, comment, params):
+        rez = self.osd_get_jobs_where(self.latest_build, self.groupid, query)
+        ids_list = ""
         for j1 in rez:
             if delete:
-                cmd = 'openqa-cli api --host {} -X DELETE jobs/{}'.format(
-                    self.OPENQA_URL_BASE, j1[0])
-                self.shell_exec(cmd, log=True, dryrun=self.dry_run)
+                cmd = f'openqa-cli api --host {self.OPENQA_URL_BASE} -X DELETE jobs/{j1.id}'
+                self.shell_exec(cmd, log=True, dryrun=self.dryrun)
             elif restart:
                 clone_cmd = '/usr/share/openqa/script/clone_job.pl'
                 common_flags = ' --skip-chained-deps --parental-inheritance '
                 if params is None:
                     params = ''
-                cmd = '{} {} --within-instance {} {} {}'.format(
-                    clone_cmd, common_flags, self.OPENQA_URL_BASE, j1[0], params)
-                self.shell_exec(cmd, log=True, dryrun=self.dry_run)
+                cmd = f'{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {params}'
+                self.shell_exec(cmd, log=True, dryrun=self.dryrun)
             elif comment:
-                self.add_comment(JobSQL(j1), comment, self.dry_run)
+                self.add_comment(j1, comment, self.dryrun)
             else:
-                self.logger.info(j1)
+                if len(ids_list) == 0:
+                    ids_list = str(j1.id)
+                else:
+                    ids_list = f"{ids_list},{j1.id}"
+        if not delete and not restart and comment is None:
+            self.logger.info(ids_list)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-d', '--dry_run', action='store_true',
+    parser.add_argument('-d', '--dryrun', action='store_true',
                         help="Fake any calls to openQA with log messages")
-    parser.add_argument('-k', '--kill', action='store_true',
-                        help="Kill geekotest comments")
     parser.add_argument('-l', '--labelmodule', help="Label failed job")
     parser.add_argument('-g', '--getlabels',
                         action='store_true', help='get list of labels')
@@ -113,22 +76,15 @@ def main():
     parser.add_argument('-p', '--params', help='extra params added to openQA job')
     parser.add_argument('--delete', action='store_true', help='delete')
     parser.add_argument('--restart', action='store_true', help='restart')
-    parser.add_argument('--sql', help='delete')
-    parser.add_argument('--groupid', help='hard code group id')
+    parser.add_argument('--groupid', help='hard code group id', required=True)
     args = parser.parse_args()
-    killer = Killer(args.dry_run)
-    if args.groupid:
-        killer.my_osd_groups = [args.groupid]
-    if args.kill:
-        killer.kill()
-    elif args.getlabels:
+    killer = Killer(args.groupid, args.dryrun, args.build)
+    if args.getlabels:
         killer.get_all_labels()
     elif args.labelmodule:
-        killer.label_by_module(args.labelmodule, args.build, args.comment)
+        killer.label_by_module(args.labelmodule, args.comment)
     elif args.query:
-        killer.get_jobs_by(args.query, args.build, args.delete)
-    elif args.sql:
-        killer.sql(args.sql, args.delete, args.restart, args.comment, args.params)
+        killer.get_jobs_by(args.query, args.delete, args.restart, args.comment, args.params)
 
 
 if __name__ == "__main__":

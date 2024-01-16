@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, String, Boolean, PickleType, DateTime, Interval, Text
+from datetime import datetime, timedelta
+from sqlalchemy import Column, Integer, String, DateTime, Interval, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import UniqueConstraint
-from datetime import datetime, timedelta
 
 Base = declarative_base()
 
@@ -10,7 +10,7 @@ class JobSQL:
 
     # group_id is queried but not serialized because in most cases we don't need it
     # but we have one case where we do ( openQAHelper.osd_get_latest_failures)
-    SELECT_QUERY = 'select id, test, result, state, flavor, arch, build, group_id from jobs where '
+    SELECT_QUERY = 'select id, test, result, state, flavor, arch, build, group_id, version from jobs where '
 
     def __init__(self, raw_job):
         self.id = raw_job[0]
@@ -20,10 +20,12 @@ class JobSQL:
         self.flavor = raw_job[4]
         self.arch = raw_job[5]
         self.build = raw_job[6]
+        self.groupid = raw_job[7]
+        self.version = raw_job[8]
 
     def __str__(self):
-        pattern = 'Job(id: {}, name: {}, result: {}, state: {}, flavor: {}, arch: {}, build: {})'
-        return pattern.format(self.id, self.name, self.result, self.state, self.flavor, self.arch, self.build)
+        pattern = 'Job(id: {}, name: {}, result: {}, state: {}, flavor: {}, arch: {}, build: {}, groupid: {}, version: {})'
+        return pattern.format(self.id, self.name, self.result, self.state, self.flavor, self.arch, self.build, self.groupid, self.version)
 
 
 class MessageLatency(Base):

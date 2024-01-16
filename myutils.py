@@ -72,7 +72,7 @@ class TaskHelper:
         if self.send_mails:
             self.send_mail(f'[{self.name}] ERROR - {socket.gethostname()}', error)
 
-    def get_latest_build(self, job_group_id=262):
+    def get_latest_build(self, job_group_id=262) -> str:
         build = '1'
         try:
             group_json = self.request_get(f'https://openqa.suse.de/group_overview/{job_group_id}.json')
@@ -85,7 +85,7 @@ class TaskHelper:
         finally:
             return build
 
-    def shell_exec(self, cmd, log=False, is_json=False, dryrun: bool = False):
+    def shell_exec(self, cmd, log=False, dryrun: bool = False):
         if dryrun:
             self.logger.info(f"NOT EXECUTING - {cmd}")
             return
@@ -93,15 +93,9 @@ class TaskHelper:
             if log:
                 self.logger.info(cmd)
             output = subprocess.check_output(cmd, shell=True)
-            if is_json:
-                o_json = json.loads(output)
-                if log:
-                    self.logger.info("%s", o_json)
-                return o_json
-            else:
-                if log:
-                    self.logger.info("%s", output)
-                return output
+            if log:
+                self.logger.info(output)
+            return output
         except subprocess.CalledProcessError:
             self.handle_error('Command died')
 
@@ -112,7 +106,7 @@ class TaskHelper:
                 connection = psycopg2.connect(user=self.osd_username, password=self.osd_password,
                                               host=self.osd_host, port="5432", database="openqa")
                 cursor = connection.cursor()
-                # self.logger.debug(query)
+                #self.logger.debug(query)
                 cursor.execute(query)
                 return cursor.fetchall()
             except (Exception, psycopg2.Error) as error:
@@ -128,7 +122,7 @@ class TaskHelper:
 class openQAHelper(TaskHelper):
 
     FIND_LATEST = "select max(id) from jobs where  build='{}' and group_id='{}'  and test='{}' and arch='{}' \
-        and flavor='{}';"
+        and flavor='{}' and version='{}';"
     OPENQA_URL_BASE = 'https://openqa.suse.de/'
     OPENQA_API_BASE = 'https://openqa.suse.de/api/v1/'
     SKIP_PATTERN = '@reviewed'
@@ -191,7 +185,7 @@ class openQAHelper(TaskHelper):
         comments = self.get_comments_from_job(job_id)
         return self.extract_bugrefs_from(comments, filter_by_user)
 
-    def osd_get_jobs_where(self, build, group_id, extra_conditions=''):
+    def osd_get_jobs_where(self, build : str, group_id: str, extra_conditions: str='') -> JobSQL:
         rezult = self.osd_query(f"{JobSQL.SELECT_QUERY} build='{build}' and group_id='{group_id}' {extra_conditions}")
         if rezult is None:
             return None
@@ -199,8 +193,7 @@ class openQAHelper(TaskHelper):
         for raw_job in rezult:
             sql_job = JobSQL(raw_job)
             self.logger.info(raw_job)
-            rez = self.osd_query(self.FIND_LATEST.format(
-                build, group_id, sql_job.name, sql_job.arch, sql_job.flavor))
+            rez = self.osd_query(self.FIND_LATEST.format(build, group_id, sql_job.name, sql_job.arch, sql_job.flavor, sql_job.version))
             if rez[0][0] == sql_job.id:
                 jobs.append(sql_job)
         return jobs
@@ -249,12 +242,12 @@ class openQAHelper(TaskHelper):
                 failed_modules = f"{failed_modules},{rez[0]}"
         return failed_modules or "NULL"
 
-    def add_comment(self, job, comment, dry_run):
+    def add_comment(self, job, comment, dryrun):
         self.logger.debug(
             f'Add a comment to {job} with reference {comment}. {self.OPENQA_URL_BASE}t{job.id}'
         )
         cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X POST jobs/{job.id}/comments text=\'{comment}\'"
-        self.shell_exec(cmd, dry_run)
+        self.shell_exec(cmd, dryrun=dryrun)
 
 
 def is_matched(rules, topic, msg):

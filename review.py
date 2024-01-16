@@ -1,15 +1,14 @@
 #!/usr/bin/python3
 
+import re
 import requests
 
-from myutils import openQAHelper
 import argparse
 import urllib3
-import json
 from models import JobSQL, Base, ReviewCache, KnownIssues
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-import re
+from myutils import openQAHelper
 
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -17,9 +16,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class Review(openQAHelper):
 
-    def __init__(self, dry_run: bool = False, aliasgroups: str = None):
+    def __init__(self, dryrun: bool = False, aliasgroups: str = None):
         super(Review, self).__init__('review', aliasgroups=aliasgroups)
-        self.dry_run = dry_run
+        self.dryrun = dryrun
         self.tabs_to_open = []
         engine = create_engine('sqlite:///{}'.format(self.config.get('DEFAULT', 'reviewdb')))
         Base.metadata.create_all(engine, Base.metadata.tables.values(), checkfirst=True)
@@ -64,7 +63,7 @@ class Review(openQAHelper):
                         self.session.commit()
                     else:
                         for ref in bugrefs:
-                            self.add_comment(job, ref, self.dry_run)
+                            self.add_comment(job, ref, self.dryrun)
         if self.tabs_to_open:
             answer = input("Open in browser? [Y/anything else] ")
             if answer == "Y":
@@ -84,7 +83,7 @@ class Review(openQAHelper):
                 if item.label == 'skip':
                     self.logger.debug("Ignoring {} due to skip instruction in known issues".format(job))
                 else:
-                    self.add_comment(job, item.label, self.dry_run)
+                    self.add_comment(job, item.label, self.dryrun)
                 comment_applied = True
         return comment_applied
 
@@ -142,7 +141,7 @@ class Review(openQAHelper):
 def main():
     parser = argparse.ArgumentParser(description="Automatically detect failed jobs and tries to guess how label them \
         based on local DB and previous failures")
-    parser.add_argument('-d', '--dry_run', action='store_true', help="Fake any calls to openQA with log messages")
+    parser.add_argument('-d', '--dryrun', action='store_true', help="Fake any calls to openQA with log messages")
     parser.add_argument('-f', '--failedmodule',
                         help="[failed_module|#11111] Move all records in reviewcache which has failed_module into \
                         KnownIssues and label them with #11111")
@@ -152,7 +151,7 @@ def main():
     parser.add_argument('-a', '--aliasgroups', help="switch from default list of groups to some named one")
     args = parser.parse_args()
 
-    review = Review(args.dry_run, args.aliasgroups)
+    review = Review(args.dryrun, args.aliasgroups)
     if args.failedmodule:
         review.failedmodule(args.failedmodule)
     elif args.jobname:
