@@ -1,11 +1,20 @@
 #!/usr/bin/python3
 import argparse
-from myutils import openQAHelper
+from datetime import datetime, timedelta
+from myutils import TaskHelper
 from models import JobSQL
 
 
 
-class Killer(openQAHelper):
+class Killer(TaskHelper):
+
+    OPENQA_API_BASE = 'https://openqa.suse.de/api/v1/'
+    FIND_LATEST = "select max(id) from jobs where  build='{}' and group_id='{}'  and test='{}' and arch='{}' \
+        and flavor='{}' and version='{}';"
+    # we have job groups which are used for several versions.
+    # in such a case current logic may found unnecessary failures
+    # related to older versions. To avoid this we limit query by time
+    not_older_than_weeks = 7
 
     def __init__(self, groupid: str, dryrun: bool = False, latest_build: str = None):
         super(Killer, self).__init__('killer')
@@ -15,23 +24,62 @@ class Killer(openQAHelper):
             self.latest_build = self.get_latest_build(self.groupid)
         else:
             self.latest_build = latest_build
-        self.logger.info('%s is latest build for %s', self.latest_build, self.get_group_name(self.groupid))
+        self.logger.info('%s is latest build for %s', self.latest_build, self.get_group_name())
+        time_str = str(datetime.now() - timedelta(weeks=Killer.not_older_than_weeks))
+        self.SQL_WHERE_RESULTS = f" and result in ('failed', 'timeout_exceeded', 'incomplete') and t_created > '{time_str}'::date"
+
+    def get_group_name(self) -> str:
+        group_json = self.request_get(f'{self.OPENQA_URL_BASE}group_overview/{self.groupid}.json')
+        return group_json['group']['name']
+
+    def get_bugrefs(self, jobs : list[JobSQL], filter_by_user=None):
+        bugrefs = set()
+        for job in jobs:
+            response = self.request_get(f'{self.OPENQA_API_BASE}jobs/{job.id}/comments')
+            for comment in response:
+                if not filter_by_user or filter_by_user == comment['userName']:
+                    bugrefs |= set(comment['bugrefs'])
+        return bugrefs
+
+    def osd_get_jobs_where(self, extra_conditions: str=None) -> JobSQL:
+        if extra_conditions is None:
+            extra_conditions = self.SQL_WHERE_RESULTS
+        rezult = self.osd_query(f"{JobSQL.SELECT_QUERY} build='{self.latest_build}' and group_id='{self.groupid}' {extra_conditions}")
+        if rezult is None:
+            return None
+        jobs = []
+        for raw_job in rezult:
+            sql_job = JobSQL(raw_job)
+            self.logger.info(raw_job)
+            rez = self.osd_query(self.FIND_LATEST.format(self.latest_build, self.groupid, sql_job.name, sql_job.arch, sql_job.flavor, sql_job.version))
+            if rez[0][0] == sql_job.id:
+                jobs.append(sql_job)
+        return jobs
+
+    def get_failed_modules(self, job_id):
+        rezult = self.osd_query(
+            f"select name from job_modules where job_id={job_id} and result='failed'"
+        )
+        failed_modules = ""
+        rezult.sort()
+        for rez in rezult:
+            if not failed_modules:
+                failed_modules = f"{rez[0]}"
+            else:
+                failed_modules = f"{failed_modules},{rez[0]}"
+        return failed_modules or "NULL"
 
     def label_by_module(self, module_filter, comment):
-        if comment is None:
-            comment = openQAHelper.SKIP_PATTERN
-        jobs_to_review = self.osd_get_jobs_where(self.latest_build, self.groupid, self.SQL_WHERE_RESULTS)
+        jobs_to_review = self.osd_get_jobs_where()
         for job in jobs_to_review:
             if module_filter in self.get_failed_modules(job.id):
                 self.add_comment(job, comment, self.dryrun)
 
     def get_all_labels(self):
-        jobs_to_review = self.osd_get_jobs_where(self.latest_build, self.groupid, self.SQL_WHERE_RESULTS)
-        bugrefs = set()
-        for job in jobs_to_review:
-            #TODO reveal ability to get only comments from certain user
-            #bugrefs = self.get_bugrefs(job.id, filter_by_user='geekotest')
-            bugrefs = bugrefs | self.get_bugrefs(job.id)
+        jobs_to_review = self.osd_get_jobs_where()
+        #TODO reveal ability to get only comments from certain user
+        #bugrefs = self.get_bugrefs(job.id, filter_by_user='geekotest')
+        bugrefs = self.get_bugrefs(jobs_to_review)
         if len(bugrefs) == 0:
             self.logger.info('No jobs labeled')
         else:
@@ -39,19 +87,19 @@ class Killer(openQAHelper):
                 self.logger.info(bug)
 
     def get_jobs_by(self, query, delete, restart, comment, params):
-        rez = self.osd_get_jobs_where(self.latest_build, self.groupid, query)
+        rez = self.osd_get_jobs_where(query)
         ids_list = ""
         for j1 in rez:
             if delete:
                 cmd = f'openqa-cli api --host {self.OPENQA_URL_BASE} -X DELETE jobs/{j1.id}'
-                self.shell_exec(cmd, log=True, dryrun=self.dryrun)
+                self.shell_exec(cmd, dryrun=self.dryrun)
             elif restart:
                 clone_cmd = '/usr/share/openqa/script/clone_job.pl'
                 common_flags = ' --skip-chained-deps --parental-inheritance '
                 if params is None:
                     params = ''
                 cmd = f'{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {params}'
-                self.shell_exec(cmd, log=True, dryrun=self.dryrun)
+                self.shell_exec(cmd, dryrun=self.dryrun)
             elif comment:
                 self.add_comment(j1, comment, self.dryrun)
             else:
