@@ -1,7 +1,6 @@
-
 class JobSQL:
 
-    SELECT_QUERY = 'select id, test, result, state, flavor, arch, build, group_id, version from jobs where '
+    SELECT_QUERY = "select id, test, result, state, flavor, arch, build, group_id, version, machine from jobs where "
 
     def __init__(self, raw_job):
         self.id = raw_job[0]
@@ -13,7 +12,19 @@ class JobSQL:
         self.build = raw_job[6]
         self.groupid = raw_job[7]
         self.version = raw_job[8]
+        self.machine = raw_job[9]
 
     def __str__(self):
-        pattern = 'Job(id: {}, name: {}, result: {}, state: {}, flavor: {}, arch: {}, build: {}, groupid: {}, version: {})'
-        return pattern.format(self.id, self.name, self.result, self.state, self.flavor, self.arch, self.build, self.groupid, self.version)
+        pattern = "Job(id: {}, name: {}, result: {}, state: {}, flavor: {}, arch: {}, build: {}, groupid: {}, version: {}, machine: {})"
+        return pattern.format(
+            self.id,
+            self.name,
+            self.result,
+            self.state,
+            self.flavor,
+            self.arch,
+            self.build,
+            self.groupid,
+            self.version,
+            self.machine,
+        )
