@@ -53,9 +53,13 @@ class Killer(TaskHelper):
         if rezult is None:
             return None
         jobs = []
+        job_names = set()
+        job_flavors = set()
+        job_arches = set()
+        job_versions = set()
+        job_machines = set()
         for raw_job in rezult:
             sql_job = JobSQL(raw_job)
-            self.logger.info(raw_job)
             rez = self.osd_query(
                 self.FIND_LATEST.format(
                     self.latest_build,
@@ -68,7 +72,13 @@ class Killer(TaskHelper):
                 )
             )
             if rez[0][0] == sql_job.id:
+                job_names.add(sql_job.name)
+                job_flavors.add(sql_job.flavor)
+                job_arches.add(sql_job.arch)
+                job_versions.add(sql_job.version)
+                job_machines.add(sql_job.machine)
                 jobs.append(sql_job)
+        self.logger.info("Return set contains:\n names=%s\nflavors=%s\narches=%s\nversions=%s\nmachines=%s", job_names, job_flavors, job_arches, job_versions, job_machines)
         return jobs
 
     def get_failed_modules(self, job_id):
