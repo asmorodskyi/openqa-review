@@ -16,8 +16,7 @@ class Killer(TaskHelper):
     not_older_than_weeks = 7
 
     def __init__(self, groupid: str, dryrun: bool = False, latest_build: str = None):
-        super(Killer, self).__init__("killer")
-        self.dryrun = dryrun
+        super(Killer, self).__init__("killer", dryrun)
         self.groupid = groupid
         if latest_build is None:
             self.latest_build = self.get_latest_build(self.groupid)
@@ -98,7 +97,7 @@ class Killer(TaskHelper):
         jobs_to_review = self.osd_get_jobs_where()
         for job in jobs_to_review:
             if module_filter in self.get_failed_modules(job.id):
-                self.add_comment(job, comment, self.dryrun)
+                self.add_comment(job, comment)
 
     def get_all_labels(self):
         jobs_to_review = self.osd_get_jobs_where()
@@ -117,16 +116,16 @@ class Killer(TaskHelper):
         for j1 in rez:
             if delete:
                 cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X DELETE jobs/{j1.id}"
-                self.shell_exec(cmd, dryrun=self.dryrun)
+                self.shell_exec(cmd)
             elif restart:
                 clone_cmd = "/usr/share/openqa/script/clone_job.pl"
                 common_flags = " --skip-chained-deps --parental-inheritance "
                 if params is None:
                     params = ""
                 cmd = f"{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {params}"
-                self.shell_exec(cmd, dryrun=self.dryrun)
+                self.shell_exec(cmd)
             elif comment:
-                self.add_comment(j1, comment, self.dryrun)
+                self.add_comment(j1, comment)
             else:
                 if len(ids_list) == 0:
                     ids_list = str(j1.id)

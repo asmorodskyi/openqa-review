@@ -12,8 +12,9 @@ class TaskHelper:
 
     OPENQA_URL_BASE = 'https://openqa.suse.de/'
 
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, name: str, dryrun: bool):
+        self.name:str = name
+        self.dryrun: bool = dryrun
         self.config = configparser.ConfigParser()
         self.config.read('/etc/review.ini')
         if self.config['DEFAULT'].getboolean('log_to_file', fallback=True):
@@ -48,8 +49,8 @@ class TaskHelper:
             self.logger.error("Failed to get build from openQA - %s", e)
         return build
 
-    def shell_exec(self, cmd : str, dryrun: bool = False) -> None:
-        if dryrun:
+    def shell_exec(self, cmd : str) -> None:
+        if self.dryrun:
             self.logger.debug("NOT EXECUTING - %s", cmd)
             return None
         try:
@@ -60,14 +61,14 @@ class TaskHelper:
             self.logger.error('Command died')
         return None
 
-    def add_comment(self, job, comment, dryrun):
+    def add_comment(self, jobid, comment):
         if comment is None:
             raise AttributeError("Comment is not defined")
         self.logger.debug(
-            f'Add a comment to {job} with reference {comment}. {self.OPENQA_URL_BASE}t{job.id}'
+            f'Add a comment="{comment}" to {self.OPENQA_URL_BASE}t{jobid}'
         )
-        cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X POST jobs/{job.id}/comments text=\'{comment}\'"
-        self.shell_exec(cmd, dryrun=dryrun)
+        cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X POST jobs/{jobid}/comments text=\'{comment}\'"
+        self.shell_exec(cmd)
 
     def osd_query(self, query: str) -> list:
         if hasattr(self, 'osd_username') and hasattr(self, 'osd_password') and hasattr(self, 'osd_host'):
