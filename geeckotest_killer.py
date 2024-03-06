@@ -77,7 +77,17 @@ class Killer(TaskHelper):
                 job_versions.add(sql_job.version)
                 job_machines.add(sql_job.machine)
                 jobs.append(sql_job)
-        self.logger.info("Return set contains:\n names=%s\nflavors=%s\narches=%s\nversions=%s\nmachines=%s", job_names, job_flavors, job_arches, job_versions, job_machines)
+        if len(job_names) > 0:
+            self.logger.info(
+                "Return set contains:\n names=%s\nflavors=%s\narches=%s\nversions=%s\nmachines=%s",
+                job_names,
+                job_flavors,
+                job_arches,
+                job_versions,
+                job_machines,
+            )
+        else:
+            self.logger.warning("NOTHING WAS FOUND")
         return jobs
 
     def get_failed_modules(self, job_id):
@@ -110,28 +120,28 @@ class Killer(TaskHelper):
             for bug in bugrefs:
                 self.logger.info(bug)
 
-    def get_jobs_by(self, query, delete, restart, comment, params):
-        rez = self.osd_get_jobs_where(query)
-        ids_list = ""
+    def get_jobs_by(self, args):
+        rez = self.osd_get_jobs_where(args.query)
+        ids_list = None
         for j1 in rez:
-            if delete:
+            if args.delete:
                 cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X DELETE jobs/{j1.id}"
                 self.shell_exec(cmd)
-            elif restart:
+            elif args.restart:
                 clone_cmd = "/usr/share/openqa/script/clone_job.pl"
                 common_flags = " --skip-chained-deps --parental-inheritance "
                 if params is None:
                     params = ""
                 cmd = f"{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {params}"
                 self.shell_exec(cmd)
-            elif comment:
-                self.add_comment(j1, comment)
+            elif args.comment:
+                self.add_comment(j1, args.comment)
             else:
                 if len(ids_list) == 0:
                     ids_list = str(j1.id)
                 else:
                     ids_list = f"{ids_list},{j1.id}"
-        if not delete and not restart and comment is None:
+        if ids_list is not None:
             self.logger.info(ids_list)
 
 
@@ -151,8 +161,8 @@ def main():
     parser.add_argument("-b", "--build", help="openQA build number")
     parser.add_argument("-c", "--comment", help="Insert comment to openQA job")
     parser.add_argument("-p", "--params", help="extra params added to openQA job")
-    parser.add_argument("--delete", action="store_true", help="delete")
-    parser.add_argument("--restart", action="store_true", help="restart")
+    parser.add_argument("--delete", action="store_true", help="delete", default=False)
+    parser.add_argument("--restart", action="store_true", help="restart", default=False)
     parser.add_argument("--groupid", help="hard code group id", required=True)
     args = parser.parse_args()
     killer = Killer(args.groupid, args.dryrun, args.build)
@@ -161,9 +171,7 @@ def main():
     elif args.labelmodule:
         killer.label_by_module(args.labelmodule, args.comment)
     elif args.query:
-        killer.get_jobs_by(
-            args.query, args.delete, args.restart, args.comment, args.params
-        )
+        killer.get_jobs_by(args)
 
 
 if __name__ == "__main__":
