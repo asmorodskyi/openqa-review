@@ -107,7 +107,7 @@ class Killer(TaskHelper):
         jobs_to_review = self.osd_get_jobs_where()
         for job in jobs_to_review:
             if module_filter in self.get_failed_modules(job.id):
-                self.add_comment(job, comment)
+                self.add_comment(job.id, comment)
 
     def get_all_labels(self):
         jobs_to_review = self.osd_get_jobs_where()
@@ -135,7 +135,7 @@ class Killer(TaskHelper):
                 cmd = f"{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {params}"
                 self.shell_exec(cmd)
             elif args.comment:
-                self.add_comment(j1, args.comment)
+                self.add_comment(j1.id, args.comment)
             else:
                 if len(ids_list) == 0:
                     ids_list = str(j1.id)
