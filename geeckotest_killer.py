@@ -122,7 +122,7 @@ class Killer(TaskHelper):
 
     def get_jobs_by(self, args):
         rez = self.osd_get_jobs_where(args.query)
-        ids_list = None
+        ids_list = ""
         for j1 in rez:
             if args.delete:
                 cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X DELETE jobs/{j1.id}"
