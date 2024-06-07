@@ -130,9 +130,9 @@ class Killer(TaskHelper):
             elif args.restart:
                 clone_cmd = "/usr/share/openqa/script/clone_job.pl"
                 common_flags = " --skip-chained-deps --parental-inheritance "
-                if params is None:
-                    params = ""
-                cmd = f"{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {params}"
+                if args.params is None:
+                    args.params = ""
+                cmd = f"{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {args.params}"
                 self.shell_exec(cmd)
             elif args.comment:
                 self.add_comment(j1.id, args.comment)
