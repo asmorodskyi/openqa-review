@@ -34,7 +34,7 @@ class Killer(TaskHelper):
         )
         return group_json["group"]["name"]
 
-    def get_bugrefs(self, jobs: list[JobSQL], filter_by_user=None):
+    def get_bugrefs(self, jobs: "list[JobSQL]", filter_by_user=None):
         bugrefs = set()
         for job in jobs:
             response = self.request_get(f"{self.OPENQA_API_BASE}jobs/{job.id}/comments")
@@ -136,6 +136,8 @@ class Killer(TaskHelper):
                 self.shell_exec(cmd)
             elif args.comment:
                 self.add_comment(j1.id, args.comment)
+            elif args.delete_comment:
+                self.delete_comment(j1.id)
             else:
                 if len(ids_list) == 0:
                     ids_list = str(j1.id)
@@ -143,6 +145,12 @@ class Killer(TaskHelper):
                     ids_list = f"{ids_list},{j1.id}"
         if ids_list is not None:
             self.logger.info(ids_list)
+
+    def delete_comment(self, jobid):
+        response = self.request_get(f"{self.OPENQA_API_BASE}jobs/{jobid}/comments")
+        if response:
+            cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X DELETE /jobs/{jobid}/comments/{response[0]['id']}"
+            self.shell_exec(cmd)
 
 
 def main():
@@ -162,6 +170,7 @@ def main():
     parser.add_argument("-c", "--comment", help="Insert comment to openQA job")
     parser.add_argument("-p", "--params", help="extra params added to openQA job")
     parser.add_argument("--delete", action="store_true", help="delete", default=False)
+    parser.add_argument("--delete_comment", action="store_true", help="delete comment", default=False)
     parser.add_argument("--restart", action="store_true", help="restart", default=False)
     parser.add_argument("--groupid", help="hard code group id", required=True)
     args = parser.parse_args()
