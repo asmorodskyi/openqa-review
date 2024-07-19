@@ -152,6 +152,25 @@ class Killer(TaskHelper):
             cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X DELETE /jobs/{jobid}/comments/{response[0]['id']}"
             self.shell_exec(cmd)
 
+    def investigate(self, jobid):
+        cmd = f"/usr/share/openqa/script/clone_job.pl --skip-chained-deps --parental-inheritance BUILD=INV{jobid} _GROUP=0 --within-instance {self.OPENQA_URL_BASE} {jobid}"
+        variables_set = set()
+        response = self.request_get(f"{self.OPENQA_URL_BASE}tests/{jobid}/file/vars.json")
+        # first collecting ALL _TEST_ISSUES variable so later we can reset others when we testing some certain incident
+        for var in response:
+            if "_TEST_ISSUES" in var:
+                variables_set.add(var)
+        for var in response:
+            # if variable exists in set hence matching expected pattern we proceed
+            if var in variables_set:
+                # we picking incidents one by one and clonning jobs with this single incident and other incidents removed
+                for incident in response[var].split(','):
+                    test_issues_var= f"{var}={incident} "
+                    for empty_var in variables_set:
+                        if empty_var != var:
+                            test_issues_var = f"{test_issues_var} {empty_var}=''"
+                    self.shell_exec(f"{cmd} {test_issues_var}")
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -171,6 +190,7 @@ def main():
     parser.add_argument("-p", "--params", help="extra params added to openQA job")
     parser.add_argument("--delete", action="store_true", help="delete", default=False)
     parser.add_argument("--delete_comment", action="store_true", help="delete comment", default=False)
+    parser.add_argument("--investigate", help="Clone aggregate scenario with indiviual incidents")
     parser.add_argument("--restart", action="store_true", help="restart", default=False)
     parser.add_argument("--groupid", help="hard code group id", required=True)
     args = parser.parse_args()
@@ -181,6 +201,8 @@ def main():
         killer.label_by_module(args.labelmodule, args.comment)
     elif args.query:
         killer.get_jobs_by(args)
+    elif args.investigate:
+        killer.investigate(args.investigate)
 
 
 if __name__ == "__main__":

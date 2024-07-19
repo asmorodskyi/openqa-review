@@ -32,10 +32,12 @@ class TaskHelper:
             self.osd_host = self.config.get('OSD', 'host')
 
     def request_get(self, url):
-        response = requests.get(url, timeout=200, verify=False).json()
-        if 'error' in response:
-            raise RuntimeError(response)
-        return response
+        response = requests.get(url, timeout=200, verify=False)
+        response.raise_for_status()
+        json = response.json()
+        if 'error' in json:
+            raise RuntimeError(json)
+        return json
 
     def get_latest_build(self, job_group_id) -> str:
         build = '1'
