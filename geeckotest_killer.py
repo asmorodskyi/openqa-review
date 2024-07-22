@@ -153,7 +153,7 @@ class Killer(TaskHelper):
             self.shell_exec(cmd)
 
     def investigate(self, jobid):
-        cmd = f"/usr/share/openqa/script/clone_job.pl --skip-chained-deps --parental-inheritance BUILD=INV{jobid} _GROUP=0 --within-instance {self.OPENQA_URL_BASE} {jobid}"
+        cmd = f"/usr/share/openqa/script/clone_job.pl --skip-chained-deps --parental-inheritance {jobid} BUILD=INV{jobid} _GROUP=0 --within-instance {self.OPENQA_URL_BASE}"
         variables_set = set()
         response = self.request_get(f"{self.OPENQA_URL_BASE}tests/{jobid}/file/vars.json")
         # first collecting ALL _TEST_ISSUES variable so later we can reset others when we testing some certain incident
@@ -164,8 +164,10 @@ class Killer(TaskHelper):
             # if variable exists in set hence matching expected pattern we proceed
             if var in variables_set:
                 # we picking incidents one by one and clonning jobs with this single incident and other incidents removed
+                i=1
                 for incident in response[var].split(','):
-                    test_issues_var= f"{var}={incident} "
+                    test_issues_var= f"{var}={incident} TEST={response['TEST']}{i} "
+                    i+=1
                     for empty_var in variables_set:
                         if empty_var != var:
                             test_issues_var = f"{test_issues_var} {empty_var}=''"
