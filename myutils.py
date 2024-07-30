@@ -2,7 +2,7 @@ import subprocess
 import configparser
 import requests
 import psycopg2
-import logzero
+import logging
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -17,15 +17,8 @@ class TaskHelper:
         self.dryrun: bool = dryrun
         self.config = configparser.ConfigParser()
         self.config.read('/etc/review.ini')
-        if self.config['DEFAULT'].getboolean('log_to_file', fallback=True):
-            self.logger = logzero.setup_logger(
-                name=name, logfile=f'/var/log/{self.name}/{self.name}.log', formatter=logzero.LogFormatter(
-                    fmt='%(color)s[%(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s',
-                    datefmt='%d-%m %H:%M:%S'))
-        else:
-            self.logger = logzero.setup_logger(
-                name=name, formatter=logzero.LogFormatter(
-                    fmt='%(color)s%(module)s:%(lineno)d|%(end_color)s %(message)s'))
+        self.logger = logging.getLogger(name)
+        logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
         if self.config.has_section('OSD'):
             self.osd_username = self.config.get('OSD', 'username')
             self.osd_password = self.config.get('OSD', 'password')
