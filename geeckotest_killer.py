@@ -156,9 +156,9 @@ class Killer(TaskHelper):
         cmd = f"/usr/share/openqa/script/clone_job.pl --skip-chained-deps --parental-inheritance {jobid} BUILD=INV{jobid} _GROUP=0 --within-instance {self.OPENQA_URL_BASE}"
         variables_set = set()
         response = self.request_get(f"{self.OPENQA_URL_BASE}tests/{jobid}/file/vars.json")
-        # first collecting ALL _TEST_ISSUES variable so later we can reset others when we testing some certain incident
+        # first collecting ALL _TEST_REPOS variable so later we can reset others when we testing some certain incident
         for var in response:
-            if "_TEST_ISSUES" in var:
+            if "_TEST_REPOS" in var:
                 variables_set.add(var)
         for var in response:
             # if variable exists in set hence matching expected pattern we proceed
