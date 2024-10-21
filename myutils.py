@@ -15,6 +15,7 @@ class TaskHelper:
     def __init__(self, name: str, dryrun: bool):
         self.name:str = name
         self.dryrun: bool = dryrun
+        self.showsql: bool = False
         self.config = configparser.ConfigParser()
         self.config.read('/etc/review.ini')
         self.logger = logging.getLogger(name)
@@ -72,7 +73,8 @@ class TaskHelper:
                 connection = psycopg2.connect(user=self.osd_username, password=self.osd_password,
                                               host=self.osd_host, port="5432", database="openqa")
                 cursor = connection.cursor()
-                #self.logger.debug(query)
+                if self.showsql:
+                    self.logger.debug(query)
                 cursor.execute(query)
                 return cursor.fetchall()
             except (Exception, psycopg2.Error) as error:

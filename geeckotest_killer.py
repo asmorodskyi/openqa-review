@@ -195,8 +195,11 @@ def main():
     parser.add_argument("--investigate", help="Clone aggregate scenario with indiviual incidents")
     parser.add_argument("--restart", action="store_true", help="restart", default=False)
     parser.add_argument("--groupid", help="hard code group id", required=True)
+    parser.add_argument("--showsql", action="store_true", help="Show sql", default=False)
     args = parser.parse_args()
     killer = Killer(args.groupid, args.dryrun, args.build)
+    if args.showsql:
+        killer.showsql=True
     if args.getlabels:
         killer.get_all_labels()
     elif args.labelmodule:
