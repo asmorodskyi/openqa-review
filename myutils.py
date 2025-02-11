@@ -66,6 +66,14 @@ class TaskHelper:
         cmd = f"openqa-cli api --host {self.OPENQA_URL_BASE} -X POST jobs/{jobid}/comments text=\'{comment}\'"
         self.shell_exec(cmd)
 
+    def getJobGroupComments(self, jobgroup: int) -> list[str]:
+        self.logger.debug("Fetching comments for job group %d ... ", jobgroup)
+        resp = self.request_get(f"{self.OPENQA_URL_BASE}api/v1/groups/{jobgroup}/comments")
+        comments = [c["id"] for c in resp]  # We just need the comment texts
+        self.logger.debug("%d comments fetched", len(comments))
+        return comments
+
+
     def osd_query(self, query: str) -> list:
         if hasattr(self, 'osd_username') and hasattr(self, 'osd_password') and hasattr(self, 'osd_host'):
             connection = None
