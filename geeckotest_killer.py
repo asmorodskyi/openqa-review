@@ -43,12 +43,15 @@ class Killer(TaskHelper):
                     bugrefs |= set(comment["bugrefs"])
         return bugrefs
 
-    def osd_get_jobs_where(self, extra_conditions: str = None) -> JobSQL:
+    def osd_get_jobs_where(
+        self, extra_conditions: str = None, all: bool = False
+    ) -> JobSQL:
         if extra_conditions is None:
             extra_conditions = self.SQL_WHERE_RESULTS
-        rezult = self.osd_query(
-            f"{JobSQL.SELECT_QUERY} build='{self.latest_build}' and group_id='{self.groupid}' {extra_conditions}"
-        )
+        query = f"{JobSQL.SELECT_QUERY} group_id='{self.groupid}'"
+        if not all:
+            query = f"{query} and build='{self.latest_build}' {extra_conditions}"
+        rezult = self.osd_query(query)
         if rezult is None:
             return None
         jobs = []
@@ -59,24 +62,32 @@ class Killer(TaskHelper):
         job_machines = set()
         for raw_job in rezult:
             sql_job = JobSQL(raw_job)
-            rez = self.osd_query(
-                self.FIND_LATEST.format(
-                    self.latest_build,
-                    self.groupid,
-                    sql_job.name,
-                    sql_job.arch,
-                    sql_job.flavor,
-                    sql_job.version,
-                    sql_job.machine,
-                )
-            )
-            if rez[0][0] == sql_job.id:
+            if all:
                 job_names.add(sql_job.name)
                 job_flavors.add(sql_job.flavor)
                 job_arches.add(sql_job.arch)
                 job_versions.add(sql_job.version)
                 job_machines.add(sql_job.machine)
                 jobs.append(sql_job)
+            else:
+                rez = self.osd_query(
+                    self.FIND_LATEST.format(
+                        self.latest_build,
+                        self.groupid,
+                        sql_job.name,
+                        sql_job.arch,
+                        sql_job.flavor,
+                        sql_job.version,
+                        sql_job.machine,
+                    )
+                )
+                if rez[0][0] == sql_job.id:
+                    job_names.add(sql_job.name)
+                    job_flavors.add(sql_job.flavor)
+                    job_arches.add(sql_job.arch)
+                    job_versions.add(sql_job.version)
+                    job_machines.add(sql_job.machine)
+                    jobs.append(sql_job)
         if len(job_names) > 0:
             self.logger.info(
                 "Return set contains:\n names=%s\nflavors=%s\narches=%s\nversions=%s\nmachines=%s",
@@ -121,7 +132,7 @@ class Killer(TaskHelper):
                 self.logger.info(bug)
 
     def get_jobs_by(self, args):
-        rez = self.osd_get_jobs_where(args.query)
+        rez = self.osd_get_jobs_where(args.query, args.all)
         ids_list = ""
         for j1 in rez:
             if args.delete:
@@ -155,7 +166,9 @@ class Killer(TaskHelper):
     def investigate(self, jobid):
         cmd = f"/usr/share/openqa/script/clone_job.pl --skip-chained-deps --parental-inheritance {jobid} BUILD=INV{jobid} _GROUP=0 --within-instance {self.OPENQA_URL_BASE}"
         variables_set = set()
-        response = self.request_get(f"{self.OPENQA_URL_BASE}tests/{jobid}/file/vars.json")
+        response = self.request_get(
+            f"{self.OPENQA_URL_BASE}tests/{jobid}/file/vars.json"
+        )
         # first collecting ALL _TEST_REPOS variable so later we can reset others when we testing some certain incident
         for var in response:
             if "_TEST_REPOS" in var:
@@ -164,10 +177,10 @@ class Killer(TaskHelper):
             # if variable exists in set hence matching expected pattern we proceed
             if var in variables_set:
                 # we picking incidents one by one and clonning jobs with this single incident and other incidents removed
-                i=1
-                for incident in response[var].split(','):
-                    test_issues_var= f"{var}={incident} TEST={response['TEST']}{i} "
-                    i+=1
+                i = 1
+                for incident in response[var].split(","):
+                    test_issues_var = f"{var}={incident} TEST={response['TEST']}{i} "
+                    i += 1
                     for empty_var in variables_set:
                         if empty_var != var:
                             test_issues_var = f"{test_issues_var} {empty_var}=''"
@@ -191,20 +204,32 @@ def main():
     parser.add_argument("-c", "--comment", help="Insert comment to openQA job")
     parser.add_argument("-p", "--params", help="extra params added to openQA job")
     parser.add_argument("--delete", action="store_true", help="delete", default=False)
-    parser.add_argument("--delete_comment", action="store_true", help="delete comment", default=False)
-    parser.add_argument("--investigate", help="Clone aggregate scenario with indiviual incidents")
+    parser.add_argument(
+        "--delete_comment", action="store_true", help="delete comment", default=False
+    )
+    parser.add_argument(
+        "--investigate", help="Clone aggregate scenario with indiviual incidents"
+    )
     parser.add_argument("--restart", action="store_true", help="restart", default=False)
     parser.add_argument("--groupid", help="hard code group id", required=True)
-    parser.add_argument("--showsql", action="store_true", help="Show sql", default=False)
+    parser.add_argument(
+        "--showsql", action="store_true", help="Show sql", default=False
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="No extra conditions everything is selected",
+        default=False,
+    )
     args = parser.parse_args()
     killer = Killer(args.groupid, args.dryrun, args.build)
     if args.showsql:
-        killer.showsql=True
+        killer.showsql = True
     if args.getlabels:
         killer.get_all_labels()
     elif args.labelmodule:
         killer.label_by_module(args.labelmodule, args.comment)
-    elif args.query:
+    elif args.query or args.all:
         killer.get_jobs_by(args)
     elif args.investigate:
         killer.investigate(args.investigate)
