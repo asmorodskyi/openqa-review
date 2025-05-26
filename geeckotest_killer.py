@@ -202,7 +202,7 @@ def main():
     parser.add_argument("-q", "--query", help="return job ids by filter")
     parser.add_argument("-b", "--build", help="openQA build number")
     parser.add_argument("-c", "--comment", help="Insert comment to openQA job")
-    parser.add_argument("-p", "--params", help="extra params added to openQA job")
+    parser.add_argument("params", help="extra params added to openQA job", nargs="*", default=[])
     parser.add_argument("--delete", action="store_true", help="delete", default=False)
     parser.add_argument(
         "--delete_comment", action="store_true", help="delete comment", default=False
