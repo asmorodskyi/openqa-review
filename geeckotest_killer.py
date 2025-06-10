@@ -140,10 +140,13 @@ class Killer(TaskHelper):
                 self.shell_exec(cmd)
             elif args.restart:
                 clone_cmd = "/usr/share/openqa/script/clone_job.pl"
-                common_flags = " --skip-checks --skip-chained-deps --parental-inheritance "
-                if args.params is None:
-                    args.params = ""
-                cmd = f"{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {args.params}"
+                common_flags = (
+                    " --skip-checks --skip-chained-deps --parental-inheritance "
+                )
+                params_str = ""
+                if args.params:
+                    params_str = " ".join(args.params)
+                cmd = f"{clone_cmd} {common_flags} --within-instance {self.OPENQA_URL_BASE} {j1.id} {params_str}"
                 self.shell_exec(cmd)
             elif args.comment:
                 self.add_comment(j1.id, args.comment)
@@ -202,7 +205,9 @@ def main():
     parser.add_argument("-q", "--query", help="return job ids by filter")
     parser.add_argument("-b", "--build", help="openQA build number")
     parser.add_argument("-c", "--comment", help="Insert comment to openQA job")
-    parser.add_argument("params", help="extra params added to openQA job", nargs="*", default=[])
+    parser.add_argument(
+        "params", help="extra params added to openQA job", nargs="*", default=[]
+    )
     parser.add_argument("--delete", action="store_true", help="delete", default=False)
     parser.add_argument(
         "--delete_comment", action="store_true", help="delete comment", default=False
