@@ -141,7 +141,7 @@ class Killer(TaskHelper):
             elif args.restart:
                 clone_cmd = "/usr/share/openqa/script/clone_job.pl"
                 common_flags = (
-                    " --skip-checks --skip-chained-deps --parental-inheritance "
+                    " --skip-chained-deps --parental-inheritance "
                 )
                 params_str = ""
                 if args.params:
