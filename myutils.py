@@ -12,14 +12,17 @@ class TaskHelper:
 
     OPENQA_URL_BASE = 'https://openqa.suse.de/'
 
-    def __init__(self, name: str, dryrun: bool):
+    def __init__(self, name: str, dryrun: bool, debug: bool = True):
         self.name:str = name
         self.dryrun: bool = dryrun
         self.showsql: bool = False
         self.config = configparser.ConfigParser()
         self.config.read('/etc/review.ini')
         self.logger = logging.getLogger(name)
-        logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+        log_level = logging.INFO
+        if debug:
+            log_level = logging.DEBUG
+        logging.basicConfig(format="%(levelname)s:%(message)s", level=log_level)
         if self.config.has_section('OSD'):
             self.osd_username = self.config.get('OSD', 'username')
             self.osd_password = self.config.get('OSD', 'password')
@@ -36,7 +39,7 @@ class TaskHelper:
     def get_latest_build(self, job_group_id) -> str:
         build = '1'
         try:
-            group_json = self.request_get(f'https://openqa.suse.de/group_overview/{job_group_id}.json')
+            group_json = self.request_get(f'{TaskHelper.OPENQA_URL_BASE}group_overview/{job_group_id}.json')
             if len(group_json['build_results']) == 0:
                 self.logger.warning(f"No jobs found in {job_group_id}")
                 return None
