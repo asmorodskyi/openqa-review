@@ -1,23 +1,19 @@
 #!/usr/bin/python3
 import argparse
-from datetime import datetime, timedelta
-from myutils import TaskHelper
+from myutils import openQAHelper
 from models import JobSQL
 
 
-class Killer(TaskHelper):
+class Killer(openQAHelper):
 
     OPENQA_API_BASE = "https://openqa.suse.de/api/v1/"
-    FIND_LATEST = "select max(id) from jobs where  build='{}' and group_id='{}'  and test='{}' and arch='{}' \
-        and flavor='{}' and version='{}' and machine='{}';"
     # we have job groups which are used for several versions.
     # in such a case current logic may found unnecessary failures
     # related to older versions. To avoid this we limit query by time
-    not_older_than_weeks = 7
+    not_older_than_weeks : int = 7
 
-    def __init__(self, groupid: str, dryrun: bool = False, latest_build: str = None):
-        super(Killer, self).__init__("killer", dryrun)
-        self.groupid = groupid
+    def __init__(self, groupid: int, dryrun: bool = False, latest_build: str = None):
+        super(Killer, self).__init__("killer", groupid, Killer.not_older_than_weeks, dryrun)
         if latest_build is None:
             self.latest_build = self.get_latest_build(self.groupid)
         else:
@@ -25,8 +21,6 @@ class Killer(TaskHelper):
         self.logger.info(
             "%s is latest build for %s", self.latest_build, self.get_group_name()
         )
-        time_str = str(datetime.now() - timedelta(weeks=Killer.not_older_than_weeks))
-        self.SQL_WHERE_RESULTS = f" and result in ('failed', 'timeout_exceeded', 'incomplete') and t_created > '{time_str}'::date"
 
     def get_group_name(self) -> str:
         group_json = self.request_get(
@@ -43,64 +37,6 @@ class Killer(TaskHelper):
                     bugrefs |= set(comment["bugrefs"])
         return bugrefs
 
-    def osd_get_jobs_where(
-        self, extra_conditions: str = None, all: bool = False
-    ) -> JobSQL:
-        if extra_conditions is None:
-            extra_conditions = self.SQL_WHERE_RESULTS
-        query = f"{JobSQL.SELECT_QUERY} group_id='{self.groupid}'"
-        if not all:
-            query = f"{query} and build='{self.latest_build}' {extra_conditions}"
-        rezult = self.osd_query(query)
-        if rezult is None:
-            return None
-        jobs = []
-        job_names = set()
-        job_flavors = set()
-        job_arches = set()
-        job_versions = set()
-        job_machines = set()
-        for raw_job in rezult:
-            sql_job = JobSQL(raw_job)
-            if all:
-                job_names.add(sql_job.name)
-                job_flavors.add(sql_job.flavor)
-                job_arches.add(sql_job.arch)
-                job_versions.add(sql_job.version)
-                job_machines.add(sql_job.machine)
-                jobs.append(sql_job)
-            else:
-                rez = self.osd_query(
-                    self.FIND_LATEST.format(
-                        self.latest_build,
-                        self.groupid,
-                        sql_job.name,
-                        sql_job.arch,
-                        sql_job.flavor,
-                        sql_job.version,
-                        sql_job.machine,
-                    )
-                )
-                if rez[0][0] == sql_job.id:
-                    job_names.add(sql_job.name)
-                    job_flavors.add(sql_job.flavor)
-                    job_arches.add(sql_job.arch)
-                    job_versions.add(sql_job.version)
-                    job_machines.add(sql_job.machine)
-                    jobs.append(sql_job)
-        if len(job_names) > 0:
-            self.logger.info(
-                "Return set contains:\n names=%s\nflavors=%s\narches=%s\nversions=%s\nmachines=%s",
-                job_names,
-                job_flavors,
-                job_arches,
-                job_versions,
-                job_machines,
-            )
-        else:
-            self.logger.warning("NOTHING WAS FOUND")
-        return jobs
-
     def get_failed_modules(self, job_id):
         rezult = self.osd_query(
             f"select name from job_modules where job_id={job_id} and result='failed'"
@@ -115,13 +51,13 @@ class Killer(TaskHelper):
         return failed_modules or "NULL"
 
     def label_by_module(self, module_filter, comment):
-        jobs_to_review = self.osd_get_jobs_where()
+        jobs_to_review = self.osd_get_jobs_where(self.latest_build)
         for job in jobs_to_review:
             if module_filter in self.get_failed_modules(job.id):
                 self.add_comment(job.id, comment)
 
     def get_all_labels(self):
-        jobs_to_review = self.osd_get_jobs_where()
+        jobs_to_review = self.osd_get_jobs_where(self.latest_build)
         # TODO reveal ability to get only comments from certain user
         # bugrefs = self.get_bugrefs(job.id, filter_by_user='geekotest')
         bugrefs = self.get_bugrefs(jobs_to_review)
@@ -132,7 +68,7 @@ class Killer(TaskHelper):
                 self.logger.info(bug)
 
     def get_jobs_by(self, args):
-        rez = self.osd_get_jobs_where(args.query, args.all)
+        rez = self.osd_get_all_jobs(args.query)
         ids_list = ""
         for j1 in rez:
             if args.delete:

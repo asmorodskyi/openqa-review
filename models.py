@@ -13,10 +13,10 @@ class JobSQL:
         self.groupid = raw_job[7]
         self.version = raw_job[8]
         self.machine = raw_job[9]
+        self.pattern = "Job(id: {}, name: {}, result: {}, state: {}, flavor: {}, arch: {}, build: {}, groupid: {}, version: {}, machine: {})"
 
     def __str__(self):
-        pattern = "Job(id: {}, name: {}, result: {}, state: {}, flavor: {}, arch: {}, build: {}, groupid: {}, version: {}, machine: {})"
-        return pattern.format(
+        return self.pattern.format(
             self.id,
             self.name,
             self.result,
@@ -27,4 +27,29 @@ class JobSQL:
             self.groupid,
             self.version,
             self.machine,
+        )
+
+    def __repr__(self) -> str:
+        return self.pattern.format(
+            self.id,
+            self.name,
+            self.result,
+            self.state,
+            self.flavor,
+            self.arch,
+            self.build,
+            self.groupid,
+            self.version,
+            self.machine,
+        )
+
+    def investigate_str(self, failed_modules: list[str]) -> str:
+        return "Job(id: {}, flavor: {}, arch: {}, build: {}, version: {}, machine: {}, failed_modules:[{}])".format(
+            self.id,
+            self.flavor,
+            self.arch,
+            self.build,
+            self.version,
+            self.machine,
+            str(failed_modules),
         )
