@@ -187,12 +187,13 @@ class openQAHelper(TaskHelper):
             jobs.log(self.logger)
         return jobs.jobs
 
-    def osd_get_all_jobs(self, extra_conditions : str = "") -> list[JobSQL]:
+    def osd_get_all_jobs(self, extra_conditions : str = "", display_summary : bool = True) -> list[JobSQL]:
         jobs = JobsList()
         query = f"{JobSQL.SELECT_QUERY} group_id='{self.groupid}' {extra_conditions}"
         rezult = self.osd_query(query)
         if rezult:
             for raw_job in rezult:
                 jobs.append(JobSQL(raw_job))
-            jobs.log(self.logger)
+            if display_summary:
+                jobs.log(self.logger)
         return jobs.jobs
